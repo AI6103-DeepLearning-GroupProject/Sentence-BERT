@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --job-name=sbert_setup
+#SBATCH --output=output/slurm/%x-%j.out
+#SBATCH --error=output/slurm/%x-%j.err
+#SBATCH --time=02:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
+VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
+PYTHON_MODULE="${PYTHON_MODULE:-python312}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+module purge
+module load "${PYTHON_MODULE}"
+
+cd "${PROJECT_DIR}"
+mkdir -p output/slurm datasets
+
+if [ ! -d "${VENV_DIR}" ]; then
+  "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+fi
+
+source "${VENV_DIR}/bin/activate"
+
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install -e .
+
+if [ -d datasets/AllNLI ] && [ -d datasets/stsbenchmark ] && [ -d datasets/wikipedia-sections-triplets ]; then
+  echo "Datasets already present, skipping download."
+else
+  python examples/datasets/get_data.py
+fi
+
+echo "Setup done. venv=${VENV_DIR}"

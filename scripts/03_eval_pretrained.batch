@@ -1,0 +1,43 @@
+#!/bin/bash
+#SBATCH --job-name=sbert_eval
+#SBATCH --output=output/slurm/%x-%j.out
+#SBATCH --error=output/slurm/%x-%j.err
+#SBATCH --time=02:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --gres=gpu:1
+
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
+VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
+PYTHON_MODULE="${PYTHON_MODULE:-python312}"
+CUDA_MODULE="${CUDA_MODULE:-cuda/12.8.0}"
+
+MODEL_NAME="${MODEL_NAME:-bert-base-nli-mean-tokens}"
+STS_PATH="${STS_PATH:-datasets/stsbenchmark}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
+SEED="${SEED:-42}"
+SAFE_MODEL_NAME="${MODEL_NAME//\//_}"
+OUTPUT_DIR="${OUTPUT_DIR:-output/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}}"
+
+module purge
+module load "${PYTHON_MODULE}"
+module load "${CUDA_MODULE}"
+
+cd "${PROJECT_DIR}"
+mkdir -p output/slurm "${OUTPUT_DIR}"
+source "${VENV_DIR}/bin/activate"
+
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+
+LOG_FILE="output/slurm/eval_${SAFE_MODEL_NAME}-${SLURM_JOB_ID}.log"
+
+python examples/evaluate_pretrained.py \
+  --model-name "${MODEL_NAME}" \
+  --sts-path "${STS_PATH}" \
+  --batch-size "${BATCH_SIZE}" \
+  --seed "${SEED}" \
+  --output-path "${OUTPUT_DIR}" 2>&1 | tee "${LOG_FILE}"
