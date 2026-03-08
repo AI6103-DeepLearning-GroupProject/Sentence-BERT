@@ -43,33 +43,46 @@ class LabelSampler(Sampler):
         self.with_replacement = with_replacement
         np.random.shuffle(self.label_range)
 
+        self.label_lengths = []
+        last_border = 0
+        for border in self.borders:
+            self.label_lengths.append(border - last_border)
+            last_border = border
+
     def __iter__(self):
-        label_idx = 0
         count = 0
+        max_count = len(self)
         already_seen = {}
-        while count < len(self.data_source):
-            label = self.label_range[label_idx]
-            if label not in already_seen:
-                already_seen[label] = []
+        while count < max_count:
+            yielded_in_cycle = False
+            for label in self.label_range:
+                if label not in already_seen:
+                    already_seen[label] = []
 
-            left_border = 0 if label == 0 else self.borders[label-1]
-            right_border = self.borders[label]
+                left_border = 0 if label == 0 else self.borders[label-1]
+                right_border = self.borders[label]
 
-            if self.with_replacement:
-                selection = np.arange(left_border, right_border)
-            else:
-                selection = [i for i in np.arange(left_border, right_border) if i not in already_seen[label]]
+                if self.with_replacement:
+                    selection = np.arange(left_border, right_border)
+                else:
+                    selection = [i for i in np.arange(left_border, right_border) if i not in already_seen[label]]
 
-            if len(selection) >= self.samples_per_label:
-                for element_idx in np.random.choice(selection, self.samples_per_label, replace=False):
-                    count += 1
-                    already_seen[label].append(element_idx)
-                    yield element_idx
+                if len(selection) >= self.samples_per_label:
+                    yielded_in_cycle = True
+                    for element_idx in np.random.choice(selection, self.samples_per_label, replace=False):
+                        if count >= max_count:
+                            break
+                        count += 1
+                        already_seen[label].append(element_idx)
+                        yield element_idx
 
-            label_idx += 1
-            if label_idx >= len(self.label_range):
-                label_idx = 0
-                np.random.shuffle(self.label_range)
+            np.random.shuffle(self.label_range)
+
+            if not yielded_in_cycle:
+                break
 
     def __len__(self):
-        return len(self.data_source)
+        if self.with_replacement:
+            return len(self.data_source)
+
+        return int(sum((label_len // self.samples_per_label) * self.samples_per_label for label_len in self.label_lengths))

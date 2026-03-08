@@ -1,9 +1,13 @@
+import os
+import random
 import requests
 from torch import Tensor, device
 from typing import Tuple, List
 from tqdm import tqdm
 import sys
 import importlib
+import numpy as np
+import torch
 
 
 def batch_to_device(batch, target_device: device):
@@ -22,6 +26,29 @@ def batch_to_device(batch, target_device: device):
     labels = batch['labels'].to(target_device)
     return features, labels
 
+
+def set_seed(seed: int, deterministic: bool = True):
+    """
+    Set random seeds for reproducible experiments.
+
+    :param seed:
+        Integer random seed
+    :param deterministic:
+        If True, configure cuDNN for deterministic behavior
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    if hasattr(torch.backends, "cudnn"):
+        torch.backends.cudnn.deterministic = deterministic
+        torch.backends.cudnn.benchmark = not deterministic
 
 
 def http_get(url, path):

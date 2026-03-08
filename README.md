@@ -65,6 +65,14 @@ python examples/datasets/get_data.py
 
 It will download some [datasets](examples/datasets) and store them on your disk.
 
+### Reproducible Training with `config.yaml`
+For reproducible runs with centralized parameter management, you can use:
+```
+python examples/train_with_config.py --experiment sts_bert --config examples/config.yaml
+```
+
+The default configuration file [examples/config.yaml](examples/config.yaml) includes baseline-compatible experiments (`nli_bert`, `sts_bert`, `sts_continue_training_bert`, `wikipedia_triplet_bert`) and a fixed random seed.
+
 
 ### Model Training from Scratch
 [examples/training_nli_bert.py](examples/training_nli_bert.py) fine-tunes BERT from the pre-trained model as provided by Google. It tunes the model on Natural Language Inference (NLI) data. Given two sentences, the model should classify if these two sentence entail, contradict, or are neutral to each other. For this, the two sentences are passed to a transformer model to generate fixed-sized sentence embeddings. These sentence embeddings are then passed to a softmax classifier to derive the final label (entail, contradict, neutral). This generates sentence embeddings that are useful also for other tasks like clustering or semantic textual similarity.
@@ -432,7 +440,6 @@ https://www.ukp.tu-darmstadt.de/
 Don't hesitate to send us an e-mail or report an issue, if something is broken (and it shouldn't be) or if you have further questions.
 
 > This repository contains experimental software and is published for the sole purpose of giving additional background details on the respective publication.
-
 
 
 

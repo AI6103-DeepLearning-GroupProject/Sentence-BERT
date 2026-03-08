@@ -17,7 +17,7 @@ from tqdm import tqdm, trange
 
 from . import __DOWNLOAD_SERVER__
 from .evaluation import SentenceEvaluator
-from .util import import_from_string, batch_to_device, http_get
+from .util import import_from_string, batch_to_device, http_get, set_seed
 from . import __version__
 
 class SentenceTransformer(nn.Sequential):
@@ -49,7 +49,7 @@ class SentenceTransformer(nn.Sequential):
 
 
                 if not os.listdir(model_path):
-                    if model_url[-1] is "/":
+                    if model_url[-1] == "/":
                         model_url = model_url[:-1]
                     logging.info("Downloading sentence transformer model from {} and saving it at {}".format(model_url, model_path))
                     try:
@@ -242,7 +242,9 @@ class SentenceTransformer(nn.Sequential):
             max_grad_norm: float = 1,
             fp16: bool = False,
             fp16_opt_level: str = 'O1',
-            local_rank: int = -1
+            local_rank: int = -1,
+            seed: int = 42,
+            deterministic: bool = True
             ):
         """
         Train the model with the given training objective
@@ -267,6 +269,9 @@ class SentenceTransformer(nn.Sequential):
         :param evaluator:
         :param epochs:
         """
+        if seed is not None:
+            set_seed(seed, deterministic=deterministic)
+
         if output_path is not None:
             os.makedirs(output_path, exist_ok=True)
             if os.listdir(output_path):
@@ -390,9 +395,10 @@ class SentenceTransformer(nn.Sequential):
         """Runs evaluation during the training"""
         if evaluator is not None:
             score = evaluator(self, output_path=output_path, epoch=epoch, steps=steps)
-            if score > self.best_score and save_best_model:
-                self.save(output_path)
+            if score > self.best_score:
                 self.best_score = score
+                if save_best_model and output_path is not None:
+                    self.save(output_path)
 
 
     def _get_scheduler(self, optimizer, scheduler: str, warmup_steps: int, t_total: int):

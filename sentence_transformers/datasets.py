@@ -174,13 +174,17 @@ class SentenceLabelDataset(Dataset):
             inputs.append(tokenized_text)
 
         grouped_inputs = []
-        for i in range(len(label_sent_mapping)):
-            if len(label_sent_mapping[i]) >= 2:
-                grouped_inputs.extend([inputs[j] for j in label_sent_mapping[i]])
+        grouped_labels = []
+        for label in sorted(label_sent_mapping.keys()):
+            if len(label_sent_mapping[label]) >= 2:
+                grouped_inputs.extend([inputs[j] for j in label_sent_mapping[label]])
+                grouped_labels.extend([labels[j] for j in label_sent_mapping[label]])
                 self.labels_right_border.append(len(grouped_inputs))
                 self.num_labels += 1
 
-        tensor_labels = torch.tensor(labels, dtype=label_type)
+        if label_type is None:
+            label_type = torch.long
+        tensor_labels = torch.tensor(grouped_labels, dtype=label_type)
 
         logging.info("Num sentences: %d" % (len(grouped_inputs)))
         logging.info("Sentences longer than max_seqence_length: {}".format(too_long))
