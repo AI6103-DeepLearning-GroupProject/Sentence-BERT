@@ -1,0 +1,139 @@
+#!/bin/bash
+#SBATCH --partition=MGPU-TC2
+#SBATCH --qos=normal
+#SBATCH --gres=gpu:1
+#
+### Specify Memory allocate to this job ###
+#SBATCH --mem=4G
+#
+### Specify number of core (CPU) to allocate to per task ###
+#SBATCH --cpus-per-task=1
+#
+### Specify number of node to compute ###
+#SBATCH --nodes=1
+#
+### Optional: Specify node to execute the job ###
+### Remove 1st # at next line for the option to take effect ###
+##SBATCH --nodelist=TC2N01
+#
+### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
+#SBATCH --time=100
+#
+#SBATCH --job-name=sbert_setup
+#SBATCH --output=output/slurm/%x-%j.out
+#SBATCH --error=output/slurm/%x-%j.err
+
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
+VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
+PYTHON_MODULE="${PYTHON_MODULE:-python312}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+module purge
+module load "${PYTHON_MODULE}"
+
+cd "${PROJECT_DIR}"
+mkdir -p output/slurm datasets
+
+sync_known_datasets() {
+  local source_base src_dir dst_dir
+  for source_base in dataset examples/datasets experiment/datasets; do
+    for name in AllNLI stsbenchmark wikipedia-sections-triplets; do
+      src_dir="${source_base}/${name}"
+      dst_dir="datasets/${name}"
+      if [ -d "${src_dir}" ]; then
+        mkdir -p "${dst_dir}"
+        cp -a "${src_dir}/." "${dst_dir}/"
+      fi
+    done
+  done
+}
+
+normalize_flat_datasets() {
+  local source_base file_name
+  for source_base in datasets dataset examples/datasets experiment/datasets; do
+    if [ -f "${source_base}/s1.train.gz" ] || [ -f "${source_base}/labels.train.gz" ]; then
+      mkdir -p datasets/AllNLI
+      for file_name in s1.train.gz s2.train.gz labels.train.gz s1.dev.gz s2.dev.gz labels.dev.gz README.md; do
+        if [ -f "${source_base}/${file_name}" ]; then
+          cp -a "${source_base}/${file_name}" "datasets/AllNLI/"
+        fi
+      done
+    fi
+
+    if [ -f "${source_base}/sts-train.csv" ] || [ -f "${source_base}/sts-dev.csv" ] || [ -f "${source_base}/sts-test.csv" ]; then
+      mkdir -p datasets/stsbenchmark
+      for file_name in sts-train.csv sts-dev.csv sts-test.csv sts-train-dev.csv correlation.pl readme.txt Readme.txt README.md LICENSE.txt; do
+        if [ -f "${source_base}/${file_name}" ]; then
+          cp -a "${source_base}/${file_name}" "datasets/stsbenchmark/"
+        fi
+      done
+    fi
+
+    if [ -f "${source_base}/train.csv" ] || [ -f "${source_base}/validation.csv" ] || [ -f "${source_base}/test.csv" ]; then
+      mkdir -p datasets/wikipedia-sections-triplets
+      for file_name in train.csv validation.csv test.csv readme.txt Readme.txt README.md LICENSE.txt; do
+        if [ -f "${source_base}/${file_name}" ]; then
+          cp -a "${source_base}/${file_name}" "datasets/wikipedia-sections-triplets/"
+        fi
+      done
+    fi
+  done
+}
+
+if [ ! -d "${VENV_DIR}" ]; then
+  "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+fi
+
+source "${VENV_DIR}/bin/activate"
+
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install -e .
+
+REQUIRED_FILES=(
+  "datasets/AllNLI/s1.train.gz"
+  "datasets/AllNLI/s2.train.gz"
+  "datasets/AllNLI/labels.train.gz"
+  "datasets/stsbenchmark/sts-train.csv"
+  "datasets/stsbenchmark/sts-dev.csv"
+  "datasets/stsbenchmark/sts-test.csv"
+  "datasets/wikipedia-sections-triplets/train.csv"
+  "datasets/wikipedia-sections-triplets/validation.csv"
+  "datasets/wikipedia-sections-triplets/test.csv"
+)
+
+sync_known_datasets
+normalize_flat_datasets
+
+missing_data=0
+for file_path in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${file_path}" ]; then
+    missing_data=1
+    break
+  fi
+done
+
+if [ "${missing_data}" -eq 1 ]; then
+  echo "Required dataset files are missing. Downloading datasets..."
+  python examples/datasets/get_data.py
+fi
+
+sync_known_datasets
+normalize_flat_datasets
+
+missing_after_sync=0
+for file_path in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${file_path}" ]; then
+    echo "Missing required dataset file after setup: ${file_path}" >&2
+    missing_after_sync=1
+  fi
+done
+
+if [ "${missing_after_sync}" -eq 1 ]; then
+  echo "Dataset setup incomplete." >&2
+  exit 1
+fi
+
+echo "Setup done. venv=${VENV_DIR}"

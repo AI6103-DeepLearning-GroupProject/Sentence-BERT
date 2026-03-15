@@ -1,0 +1,117 @@
+global:
+  seed: 42
+  deterministic: true
+  evaluate_on_test: true
+  training:
+    batch_size: 16
+    num_epochs: 1
+    warmup_ratio: 0.1
+    evaluation_steps: 1000
+    scheduler: WarmupLinear
+    weight_decay: 0.01
+    save_best_model: true
+    max_grad_norm: 1
+    fp16: false
+    fp16_opt_level: O1
+    optimizer_params:
+      lr: 2.0e-5
+      eps: 1.0e-6
+      correct_bias: false
+  output:
+    root: output
+
+experiments:
+  nli_bert:
+    task:
+      type: nli_softmax
+    model:
+      encoder_type: BERT
+      model_name: bert-base-uncased
+      max_seq_length: 128
+      do_lower_case: true
+      pooling:
+        mean_tokens: true
+        cls_token: false
+        max_tokens: false
+        mean_sqrt_len_tokens: false
+    data:
+      nli_path: datasets/AllNLI
+      nli_train_file: train.gz
+      sts_path: datasets/stsbenchmark
+      sts_dev_file: sts-dev.csv
+      sts_test_file: sts-test.csv
+      normalize_scores: true
+    output:
+      name_prefix: training_nli_bert-base-uncased
+    training:
+      num_epochs: 1
+
+  sts_bert:
+    task:
+      type: sts_cosine
+    model:
+      encoder_type: BERT
+      model_name: bert-base-uncased
+      max_seq_length: 128
+      do_lower_case: true
+      pooling:
+        mean_tokens: true
+        cls_token: false
+        max_tokens: false
+        mean_sqrt_len_tokens: false
+    data:
+      sts_path: datasets/stsbenchmark
+      sts_train_file: sts-train.csv
+      sts_dev_file: sts-dev.csv
+      sts_test_file: sts-test.csv
+      normalize_scores: true
+    output:
+      name_prefix: training_stsbenchmark_bert
+    training:
+      num_epochs: 4
+
+  sts_continue_training_bert:
+    task:
+      type: sts_cosine
+    model:
+      pretrained_model_name: bert-base-nli-mean-tokens
+    data:
+      sts_path: datasets/stsbenchmark
+      sts_train_file: sts-train.csv
+      sts_dev_file: sts-dev.csv
+      sts_test_file: sts-test.csv
+      normalize_scores: true
+    output:
+      name_prefix: training_stsbenchmark_continue_training-bert-base-nli-mean-tokens
+    training:
+      num_epochs: 4
+
+  wikipedia_triplet_bert:
+    task:
+      type: triplet
+    model:
+      encoder_type: BERT
+      model_name: bert-base-uncased
+      max_seq_length: 128
+      do_lower_case: true
+      pooling:
+        mean_tokens: true
+        cls_token: false
+        max_tokens: false
+        mean_sqrt_len_tokens: false
+    data:
+      triplet_path: datasets/wikipedia-sections-triplets
+      train_file: train.csv
+      dev_file: validation.csv
+      test_file: test.csv
+      dev_max_examples: 1000
+      s1_col_idx: 1
+      s2_col_idx: 2
+      s3_col_idx: 3
+      delimiter: ","
+      quoting: QUOTE_MINIMAL
+      has_header: true
+    output:
+      name_prefix: bert-base-wikipedia-sections-mean-tokens
+    training:
+      num_epochs: 1
