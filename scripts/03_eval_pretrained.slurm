@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #
 ### Specify Memory allocate to this job ###
-#SBATCH --mem=4G
+#SBATCH --mem=40G
 #
 ### Specify number of core (CPU) to allocate to per task ###
 #SBATCH --cpus-per-task=1
@@ -14,10 +14,10 @@
 #
 ### Optional: Specify node to execute the job ###
 ### Remove 1st # at next line for the option to take effect ###
-##SBATCH --nodelist=TC2N01
+#SBATCH --nodelist=TC2N06
 #
 ### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
-#SBATCH --time=120
+#SBATCH --time=320
 #
 #SBATCH --job-name=sbert_eval
 #SBATCH --output=output/slurm/%x-%j.out
@@ -83,7 +83,7 @@ fi
 
 if [ ! -f "${STS_TEST_PATH}" ]; then
   echo "Missing required STS test file: ${STS_TEST_PATH}" >&2
-  echo "Run: sbatch scripts/01_setup_env_data.batch" >&2
+  echo "Run: sbatch scripts/01_setup_env_data.slurm" >&2
   echo "Or submit this job with DATA_AUTO_DOWNLOAD=1 (default)." >&2
   exit 1
 fi

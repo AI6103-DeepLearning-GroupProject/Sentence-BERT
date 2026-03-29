@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #
 ### Specify Memory allocate to this job ###
-#SBATCH --mem=4G
+#SBATCH --mem=40G
 #
 ### Specify number of core (CPU) to allocate to per task ###
 #SBATCH --cpus-per-task=1
@@ -14,7 +14,7 @@
 #
 ### Optional: Specify node to execute the job ###
 ### Remove 1st # at next line for the option to take effect ###
-##SBATCH --nodelist=TC2N01
+#SBATCH --nodelist=TC2N06
 #
 ### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
 #SBATCH --time=360
@@ -29,7 +29,11 @@ PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
 PYTHON_MODULE="${PYTHON_MODULE:-python312}"
 CUDA_MODULE="${CUDA_MODULE:-cuda/12.8.0}"
-EXPERIMENT="${EXPERIMENT:-sts_bert}"
+CONFIG_PATH="${CONFIG_PATH:-examples/config.yaml}"
+EXPERIMENT="${EXPERIMENT:-runtime}"
+MODEL_VARIANT="${MODEL_VARIANT:-sbert_base}"
+DATA_MODE="${DATA_MODE:-sts}"
+EPOCHS="${EPOCHS:-4}"
 SEED="${SEED:-42}"
 DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-1}"
 
@@ -45,7 +49,12 @@ export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 
-LOG_FILE="output/slurm/train_${EXPERIMENT}-${SLURM_JOB_ID}.log"
+DATA_MODE_NORM="$(echo "${DATA_MODE}" | tr '[:upper:]' '[:lower:]' | tr '+-' '__')"
+if [ "${EXPERIMENT}" = "runtime" ]; then
+  LOG_FILE="output/slurm/train_${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}-${SLURM_JOB_ID}.log"
+else
+  LOG_FILE="output/slurm/train_${EXPERIMENT}-${SLURM_JOB_ID}.log"
+fi
 
 sync_known_datasets() {
   local source_base src_dir dst_dir
@@ -97,35 +106,70 @@ sync_known_datasets
 normalize_flat_datasets
 
 required_files=()
-case "${EXPERIMENT}" in
-  nli_bert)
-    required_files=(
-      "datasets/AllNLI/s1.train.gz"
-      "datasets/AllNLI/s2.train.gz"
-      "datasets/AllNLI/labels.train.gz"
-      "datasets/stsbenchmark/sts-dev.csv"
-      "datasets/stsbenchmark/sts-test.csv"
-    )
-    ;;
-  sts_bert|sts_continue_training_bert)
-    required_files=(
-      "datasets/stsbenchmark/sts-train.csv"
-      "datasets/stsbenchmark/sts-dev.csv"
-      "datasets/stsbenchmark/sts-test.csv"
-    )
-    ;;
-  wikipedia_triplet_bert)
-    required_files=(
-      "datasets/wikipedia-sections-triplets/train.csv"
-      "datasets/wikipedia-sections-triplets/validation.csv"
-      "datasets/wikipedia-sections-triplets/test.csv"
-    )
-    ;;
-  *)
-    echo "Unknown EXPERIMENT='${EXPERIMENT}'. Update scripts/02_train_baseline.batch required_files mapping." >&2
-    exit 1
-    ;;
-esac
+if [ "${EXPERIMENT}" = "runtime" ]; then
+  case "${DATA_MODE_NORM}" in
+    sts)
+      required_files=(
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    nli)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    sts_nli)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    *)
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, or sts+nli (sts_nli)." >&2
+      exit 1
+      ;;
+  esac
+else
+  case "${EXPERIMENT}" in
+    nli_bert)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    sts_bert|sts_continue_training_bert)
+      required_files=(
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    wikipedia_triplet_bert)
+      required_files=(
+        "datasets/wikipedia-sections-triplets/train.csv"
+        "datasets/wikipedia-sections-triplets/validation.csv"
+        "datasets/wikipedia-sections-triplets/test.csv"
+      )
+      ;;
+    *)
+      echo "Unknown EXPERIMENT='${EXPERIMENT}'. Update scripts/02_train_baseline.slurm required_files mapping." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 missing_data=0
 for file_path in "${required_files[@]}"; do
@@ -145,13 +189,16 @@ fi
 for file_path in "${required_files[@]}"; do
   if [ ! -f "${file_path}" ]; then
     echo "Missing required dataset file: ${file_path}" >&2
-    echo "Run: sbatch scripts/01_setup_env_data.batch" >&2
+    echo "Run: sbatch scripts/01_setup_env_data.slurm" >&2
     echo "Or submit this job with DATA_AUTO_DOWNLOAD=1 (default)." >&2
     exit 1
   fi
 done
 
 python examples/train_with_config.py \
-  --config examples/config.yaml \
+  --config "${CONFIG_PATH}" \
   --experiment "${EXPERIMENT}" \
+  --model-variant "${MODEL_VARIANT}" \
+  --data-mode "${DATA_MODE}" \
+  --epochs "${EPOCHS}" \
   --seed "${SEED}" 2>&1 | tee "${LOG_FILE}"

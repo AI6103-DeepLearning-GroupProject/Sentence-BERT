@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #
 ### Specify Memory allocate to this job ###
-#SBATCH --mem=4G
+#SBATCH --mem=40G
 #
 ### Specify number of core (CPU) to allocate to per task ###
 #SBATCH --cpus-per-task=1
@@ -14,7 +14,7 @@
 #
 ### Optional: Specify node to execute the job ###
 ### Remove 1st # at next line for the option to take effect ###
-##SBATCH --nodelist=TC2N01
+#SBATCH --nodelist=TC2N06
 #
 ### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
 #SBATCH --time=100

@@ -4,7 +4,7 @@ global:
   evaluate_on_test: true
   training:
     batch_size: 16
-    num_epochs: 1
+    num_epochs: 4
     warmup_ratio: 0.1
     evaluation_steps: 1000
     scheduler: WarmupLinear
@@ -115,3 +115,107 @@ experiments:
       name_prefix: bert-base-wikipedia-sections-mean-tokens
     training:
       num_epochs: 1
+
+  runtime:
+    runtime:
+      model_variant: sbert_base
+      data_mode: sts
+      epochs: 4
+      model_variants:
+        sbert_base:
+          encoder_type: BERT
+          model_name: bert-base-uncased
+          max_seq_length: 128
+          do_lower_case: true
+          pooling:
+            mean_tokens: true
+            cls_token: false
+            max_tokens: false
+            mean_sqrt_len_tokens: false
+
+        sbert_large:
+          encoder_type: BERT
+          model_name: bert-large-uncased
+          max_seq_length: 128
+          do_lower_case: true
+          pooling:
+            mean_tokens: true
+            cls_token: false
+            max_tokens: false
+            mean_sqrt_len_tokens: false
+
+        sroberta_base:
+          encoder_type: RoBERTa
+          model_name: roberta-base
+          max_seq_length: 128
+          do_lower_case: false
+          pooling:
+            mean_tokens: true
+            cls_token: false
+            max_tokens: false
+            mean_sqrt_len_tokens: false
+
+        sroberta_large:
+          encoder_type: RoBERTa
+          model_name: roberta-large
+          max_seq_length: 128
+          do_lower_case: false
+          pooling:
+            mean_tokens: true
+            cls_token: false
+            max_tokens: false
+            mean_sqrt_len_tokens: false
+
+      data_modes:
+        sts:
+          stages:
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+
+        nli:
+          stages:
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+
+        sts_nli:
+          stages:
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+    output:
+      name_prefix: training_runtime
