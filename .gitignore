@@ -7,3 +7,4 @@ sentence_transformers.egg-info
 dist/
 examples_nr/
 datasets/
+result/

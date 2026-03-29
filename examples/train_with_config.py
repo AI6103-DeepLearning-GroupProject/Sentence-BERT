@@ -10,6 +10,7 @@ import logging
 import math
 import os
 from datetime import datetime
+from typing import Dict, Optional
 
 import yaml
 from torch.utils.data import DataLoader
@@ -25,6 +26,9 @@ def _parse_args():
     parser.add_argument("--config", type=str, default=os.path.join("examples", "config.yaml"), help="Path to YAML config file")
     parser.add_argument("--experiment", type=str, required=True, help="Experiment name inside config.experiments")
     parser.add_argument("--seed", type=int, default=None, help="Override seed from config")
+    parser.add_argument("--model-variant", type=str, default=None, help="Runtime model variant key from config.runtime.model_variants")
+    parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, sts+nli")
+    parser.add_argument("--epochs", type=int, default=None, help="Runtime epoch override for stages that do not set num_epochs explicitly")
     return parser.parse_args()
 
 
@@ -50,15 +54,81 @@ def _load_config(config_path: str, experiment_name: str):
     return merged
 
 
-def _build_output_path(exp_name: str, config: dict):
+def _build_output_path(exp_name: str, config: dict, suffix: Optional[str] = None):
     output_cfg = config.get("output", {})
     if "path" in output_cfg:
         return output_cfg["path"]
 
     root = output_cfg.get("root", "output")
     prefix = output_cfg.get("name_prefix", exp_name)
+    if suffix:
+        prefix = "{}_{}".format(prefix, suffix)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(root, "{}-{}".format(prefix, timestamp))
+
+
+def _safe_name(value: str) -> str:
+    return value.replace("/", "_").replace("\\", "_").replace("+", "_plus_").replace("-", "_").lower()
+
+
+def _normalize_data_mode(value: str) -> str:
+    return value.strip().lower().replace("+", "_").replace("-", "_")
+
+
+def _resolve_runtime_plan(config: dict, args) -> Optional[dict]:
+    runtime_cfg = config.get("runtime")
+    if not isinstance(runtime_cfg, dict):
+        return None
+
+    model_variants = runtime_cfg.get("model_variants", {})
+    data_modes = runtime_cfg.get("data_modes", {})
+    if not model_variants or not data_modes:
+        return None
+
+    model_variant = args.model_variant or runtime_cfg.get("model_variant", "sbert_base")
+    if model_variant not in model_variants:
+        raise ValueError("Unknown runtime model_variant '{}'. Available: {}".format(model_variant, sorted(model_variants.keys())))
+
+    requested_data_mode = args.data_mode or runtime_cfg.get("data_mode", "sts")
+    normalized_mode = _normalize_data_mode(requested_data_mode)
+    normalized_to_key = {_normalize_data_mode(key): key for key in data_modes.keys()}
+    if normalized_mode not in normalized_to_key:
+        raise ValueError("Unknown runtime data_mode '{}'. Available: {}".format(requested_data_mode, sorted(data_modes.keys())))
+    data_mode_key = normalized_to_key[normalized_mode]
+
+    default_epochs = runtime_cfg.get("epochs", 4)
+    epochs = args.epochs if args.epochs is not None else default_epochs
+
+    mode_cfg = data_modes[data_mode_key]
+    stages_cfg = mode_cfg.get("stages", [])
+    if not stages_cfg:
+        raise ValueError("Runtime data_mode '{}' has no stages configured".format(data_mode_key))
+
+    base_training_cfg = dict(config.get("training", {}))
+    stages = []
+    for stage_idx, stage_cfg in enumerate(stages_cfg):
+        if "task" not in stage_cfg or "data" not in stage_cfg:
+            raise ValueError("runtime.data_modes.{}.stages[{}] must define task and data".format(data_mode_key, stage_idx))
+
+        stage_training_cfg = dict(base_training_cfg)
+        stage_training_cfg.update(stage_cfg.get("training", {}))
+        if "num_epochs" not in stage_training_cfg:
+            stage_training_cfg["num_epochs"] = epochs
+
+        stage_name = stage_cfg.get("name", "stage{}".format(stage_idx + 1))
+        stages.append({
+            "name": stage_name,
+            "task": stage_cfg["task"],
+            "data": stage_cfg["data"],
+            "training": stage_training_cfg,
+        })
+
+    return {
+        "model_variant": model_variant,
+        "data_mode": data_mode_key,
+        "model": model_variants[model_variant],
+        "stages": stages,
+    }
 
 
 def _build_model(model_cfg: dict):
@@ -182,38 +252,12 @@ def _build_task_components(config: dict, model: SentenceTransformer):
     raise ValueError("Unknown task.type: {}".format(task_type))
 
 
-def main():
-    args = _parse_args()
-    config = _load_config(args.config, args.experiment)
-
-    if args.seed is not None:
-        config["seed"] = args.seed
-
-    logging.basicConfig(
-        format="%(asctime)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=logging.INFO,
-        handlers=[LoggingHandler()],
-    )
-
-    seed = config.get("seed", 42)
-    deterministic = config.get("deterministic", True)
-    set_seed(seed, deterministic=deterministic)
-    logging.info("Seed set to %d (deterministic=%s)", seed, deterministic)
-
-    model = _build_model(config["model"])
-    train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(config, model)
-
-    training_cfg = config["training"]
+def _build_fit_kwargs(train_dataloader, train_loss, evaluator, training_cfg: dict, output_path: Optional[str], seed: int, deterministic: bool):
     num_epochs = training_cfg.get("num_epochs", 1)
     warmup_steps = training_cfg.get("warmup_steps")
     if warmup_steps is None:
         warmup_ratio = training_cfg.get("warmup_ratio", 0.1)
         warmup_steps = int(math.ceil(len(train_dataloader) * num_epochs * warmup_ratio))
-
-    output_path = _build_output_path(args.experiment, config)
-    logging.info("Output path: %s", output_path)
-    logging.info("Warmup steps: %s", warmup_steps)
 
     fit_kwargs = {
         "train_objectives": [(train_dataloader, train_loss)],
@@ -236,6 +280,90 @@ def main():
     if optimizer_params is not None:
         fit_kwargs["optimizer_params"] = optimizer_params
 
+    return fit_kwargs
+
+
+def main():
+    args = _parse_args()
+    config = _load_config(args.config, args.experiment)
+
+    if args.seed is not None:
+        config["seed"] = args.seed
+
+    logging.basicConfig(
+        format="%(asctime)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=logging.INFO,
+        handlers=[LoggingHandler()],
+    )
+
+    seed = config.get("seed", 42)
+    deterministic = config.get("deterministic", True)
+    set_seed(seed, deterministic=deterministic)
+    logging.info("Seed set to %d (deterministic=%s)", seed, deterministic)
+
+    runtime_plan = _resolve_runtime_plan(config, args)
+    if runtime_plan is not None:
+        runtime_suffix = "{}_{}".format(_safe_name(runtime_plan["model_variant"]), _safe_name(runtime_plan["data_mode"]))
+        output_path = _build_output_path(args.experiment, config, suffix=runtime_suffix)
+        logging.info("Runtime mode enabled: model_variant=%s, data_mode=%s", runtime_plan["model_variant"], runtime_plan["data_mode"])
+        logging.info("Output path: %s", output_path)
+
+        model = _build_model(runtime_plan["model"])
+        final_test_evaluator = None
+        final_save_best_model = True
+
+        total_stages = len(runtime_plan["stages"])
+        for stage_idx, stage_cfg in enumerate(runtime_plan["stages"]):
+            stage_name = stage_cfg["name"]
+            is_last_stage = (stage_idx == total_stages - 1)
+
+            logging.info("Start stage %d/%d: %s", stage_idx + 1, total_stages, stage_name)
+            train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
+
+            stage_training_cfg = dict(stage_cfg["training"])
+            if not is_last_stage:
+                stage_training_cfg["save_best_model"] = False
+                stage_output_path = None
+            else:
+                stage_output_path = output_path
+
+            fit_kwargs = _build_fit_kwargs(
+                train_dataloader=train_dataloader,
+                train_loss=train_loss,
+                evaluator=evaluator,
+                training_cfg=stage_training_cfg,
+                output_path=stage_output_path,
+                seed=seed,
+                deterministic=deterministic,
+            )
+            logging.info("Stage %s warmup steps: %s", stage_name, fit_kwargs["warmup_steps"])
+            model.fit(**fit_kwargs)
+
+            final_test_evaluator = test_evaluator
+            final_save_best_model = stage_training_cfg.get("save_best_model", True)
+
+        if config.get("evaluate_on_test", True) and final_test_evaluator is not None:
+            eval_model = SentenceTransformer(output_path) if final_save_best_model else model
+            eval_model.evaluate(final_test_evaluator)
+        return
+
+    model = _build_model(config["model"])
+    train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(config, model)
+    training_cfg = config["training"]
+    output_path = _build_output_path(args.experiment, config)
+    logging.info("Output path: %s", output_path)
+
+    fit_kwargs = _build_fit_kwargs(
+        train_dataloader=train_dataloader,
+        train_loss=train_loss,
+        evaluator=evaluator,
+        training_cfg=training_cfg,
+        output_path=output_path,
+        seed=seed,
+        deterministic=deterministic,
+    )
+    logging.info("Warmup steps: %s", fit_kwargs["warmup_steps"])
     model.fit(**fit_kwargs)
 
     if config.get("evaluate_on_test", True):

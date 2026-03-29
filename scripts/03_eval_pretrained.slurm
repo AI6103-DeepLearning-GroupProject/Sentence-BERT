@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #
 ### Specify Memory allocate to this job ###
-#SBATCH --mem=4G
+#SBATCH --mem=40G
 #
 ### Specify number of core (CPU) to allocate to per task ###
 #SBATCH --cpus-per-task=1
@@ -14,10 +14,10 @@
 #
 ### Optional: Specify node to execute the job ###
 ### Remove 1st # at next line for the option to take effect ###
-##SBATCH --nodelist=TC2N01
+#SBATCH --nodelist=TC2N06
 #
 ### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
-#SBATCH --time=120
+#SBATCH --time=320
 #
 #SBATCH --job-name=sbert_eval
 #SBATCH --output=output/slurm/%x-%j.out
@@ -35,6 +35,9 @@ STS_PATH="${STS_PATH:-datasets/stsbenchmark}"
 STS_TEST_FILE="${STS_TEST_FILE:-sts-test.csv}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 SEED="${SEED:-42}"
+NUM_RUNS="${NUM_RUNS:-10}"
+SEED_STEP="${SEED_STEP:-1}"
+MAIN_SIMILARITY="${MAIN_SIMILARITY:-cosine}"
 SAFE_MODEL_NAME="${MODEL_NAME//\//_}"
 OUTPUT_DIR="${OUTPUT_DIR:-output/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}}"
 DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-1}"
@@ -83,7 +86,7 @@ fi
 
 if [ ! -f "${STS_TEST_PATH}" ]; then
   echo "Missing required STS test file: ${STS_TEST_PATH}" >&2
-  echo "Run: sbatch scripts/01_setup_env_data.batch" >&2
+  echo "Run: sbatch scripts/01_setup_env_data.slurm" >&2
   echo "Or submit this job with DATA_AUTO_DOWNLOAD=1 (default)." >&2
   exit 1
 fi
@@ -94,4 +97,7 @@ python examples/evaluate_pretrained.py \
   --sts-test-file "${STS_TEST_FILE}" \
   --batch-size "${BATCH_SIZE}" \
   --seed "${SEED}" \
+  --num-runs "${NUM_RUNS}" \
+  --seed-step "${SEED_STEP}" \
+  --main-similarity "${MAIN_SIMILARITY}" \
   --output-path "${OUTPUT_DIR}" 2>&1 | tee "${LOG_FILE}"
