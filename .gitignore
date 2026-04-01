@@ -8,3 +8,16 @@ dist/
 examples_nr/
 datasets/
 result/
+
+# report middle files
+*.log
+*.tmp
+*.aux
+*.out
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.lof
