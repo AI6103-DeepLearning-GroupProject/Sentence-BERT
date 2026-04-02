@@ -6,6 +6,9 @@ slurm:
     data_mode: sts  # iff experiment=runtime; options: sts | nli | sts_nli(or sts+nli) | sts_nli_mnrl (or sts+nli+mnrl); -> experiments.runtime.runtime.data_modes.<name>
     epochs: 4  # Used only when experiment=runtime to override stage default epochs (applies to stages without stage.training.num_epochs).
     seed: 42  # Training random seed (passed to train_with_config.py --seed).
+    num_runs: 3  # Number of train+eval cycles in scripts/02_train_sbert.slurm (different seeds across runs).
+    seed_step: 1  # Seed increment between training runs; run_i seed = seed + (i-1)*seed_step.
+    result_dir: ""  # Optional fixed result folder for combined train+eval artifacts; empty means auto path under result/.
     data_auto_download: 1  # Options: 0/1; 1 means auto-run examples/datasets/get_data.py when required files are missing.
 
   eval:

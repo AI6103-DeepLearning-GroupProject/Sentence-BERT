@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #
 ### Specify Memory allocate to this job ###
-#SBATCH --mem=40G
+#SBATCH --mem=44G
 #
 ### Specify number of core (CPU) to allocate to per task ###
 #SBATCH --cpus-per-task=1
@@ -19,7 +19,7 @@
 ### Specify Time Limit, format: <min> or <min>:<sec> or <hr>:<min>:<sec> or <days>-<hr>:<min>:<sec> or <days>-<hr> ###
 #SBATCH --time=360
 #
-#SBATCH --job-name=sbert_baseline
+#SBATCH --job-name=train_SBERT
 #SBATCH --output=output/slurm/%x-%j.out
 #SBATCH --error=output/slurm/%x-%j.err
 
@@ -30,12 +30,22 @@ VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
 PYTHON_MODULE="${PYTHON_MODULE:-python312}"
 CUDA_MODULE="${CUDA_MODULE:-cuda/12.8.0}"
 ROOT_RUNTIME_CONFIG="${ROOT_RUNTIME_CONFIG:-config.yaml}"
+
 CONFIG_PATH="${CONFIG_PATH:-}"
 EXPERIMENT="${EXPERIMENT:-}"
 MODEL_VARIANT="${MODEL_VARIANT:-}"
 DATA_MODE="${DATA_MODE:-}"
 EPOCHS="${EPOCHS:-}"
 SEED="${SEED:-}"
+NUM_RUNS="${NUM_RUNS:-}"
+SEED_STEP="${SEED_STEP:-}"
+RESULT_DIR="${RESULT_DIR:-}"
+MODEL_DIR="${MODEL_DIR:-}"
+
+STS_PATH="${STS_PATH:-}"
+STS_TEST_FILE="${STS_TEST_FILE:-}"
+BATCH_SIZE="${BATCH_SIZE:-}"
+MAIN_SIMILARITY="${MAIN_SIMILARITY:-}"
 DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-}"
 
 module purge
@@ -94,8 +104,45 @@ fi
 if [ -z "${SEED}" ]; then
   SEED="$(read_root_cfg "slurm.train.seed" "42")"
 fi
+if [ -z "${NUM_RUNS}" ]; then
+  NUM_RUNS="$(read_root_cfg "slurm.train.num_runs" "3")"
+fi
+if [ -z "${SEED_STEP}" ]; then
+  SEED_STEP="$(read_root_cfg "slurm.train.seed_step" "1")"
+fi
+if [ -z "${RESULT_DIR}" ]; then
+  RESULT_DIR="$(read_root_cfg "slurm.train.result_dir" "")"
+fi
+if [ -z "${STS_PATH}" ]; then
+  STS_PATH="$(read_root_cfg "slurm.eval.sts_path" "datasets/stsbenchmark")"
+fi
+if [ -z "${STS_TEST_FILE}" ]; then
+  STS_TEST_FILE="$(read_root_cfg "slurm.eval.sts_test_file" "sts-test.csv")"
+fi
+if [ -z "${BATCH_SIZE}" ]; then
+  BATCH_SIZE="$(read_root_cfg "slurm.eval.batch_size" "32")"
+fi
+if [ -z "${MAIN_SIMILARITY}" ]; then
+  MAIN_SIMILARITY="$(read_root_cfg "slurm.eval.main_similarity" "cosine")"
+fi
 if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
-  DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.train.data_auto_download" "1")"
+  DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.train.data_auto_download" "")"
+  if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
+    DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.eval.data_auto_download" "1")"
+  fi
+fi
+
+if ! [[ "${SEED}" =~ ^-?[0-9]+$ ]]; then
+  echo "SEED must be an integer. Got: ${SEED}" >&2
+  exit 1
+fi
+if ! [[ "${NUM_RUNS}" =~ ^[0-9]+$ ]] || [ "${NUM_RUNS}" -lt 1 ]; then
+  echo "NUM_RUNS must be an integer >= 1. Got: ${NUM_RUNS}" >&2
+  exit 1
+fi
+if ! [[ "${SEED_STEP}" =~ ^[0-9]+$ ]] || [ "${SEED_STEP}" -lt 1 ]; then
+  echo "SEED_STEP must be an integer >= 1. Got: ${SEED_STEP}" >&2
+  exit 1
 fi
 
 export PYTHONUNBUFFERED=1
@@ -103,10 +150,26 @@ export TOKENIZERS_PARALLELISM=false
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 
 DATA_MODE_NORM="$(echo "${DATA_MODE}" | tr '[:upper:]' '[:lower:]' | tr '+-' '__')"
+if [ -z "${RESULT_DIR}" ]; then
+  if [ "${EXPERIMENT}" = "runtime" ]; then
+    RESULT_DIR="result/${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}"
+  else
+    RESULT_DIR="result/${EXPERIMENT}"
+  fi
+fi
+
+if [ -z "${MODEL_DIR}" ]; then
+  MODEL_DIR="${RESULT_DIR}/model"
+fi
+EVAL_TMP_DIR="${RESULT_DIR}/eval_current"
+RUNS_JSONL="${RESULT_DIR}/runs.jsonl"
+SUMMARY_JSON="${RESULT_DIR}/summary.json"
+SUMMARY_CSV="${RESULT_DIR}/summary_table.csv"
+
 if [ "${EXPERIMENT}" = "runtime" ]; then
-  LOG_FILE="output/slurm/train_${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}-${SLURM_JOB_ID}.log"
+  LOG_FILE="output/slurm/${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}-${SLURM_JOB_ID}.log"
 else
-  LOG_FILE="output/slurm/train_${EXPERIMENT}-${SLURM_JOB_ID}.log"
+  LOG_FILE="output/slurm/${EXPERIMENT}-${SLURM_JOB_ID}.log"
 fi
 
 sync_known_datasets() {
@@ -170,6 +233,28 @@ build_contrastive_pairs_if_needed() {
       fi
     fi
   fi
+}
+
+safe_cleanup_dir() {
+  local target_dir="$1"
+  local abs_target abs_root
+
+  if [ ! -e "${target_dir}" ]; then
+    return 0
+  fi
+
+  abs_target="$(cd "${target_dir}" && pwd -P)"
+  abs_root="$(mkdir -p "${RESULT_DIR}" && cd "${RESULT_DIR}" && pwd -P)"
+
+  case "${abs_target}" in
+    "${abs_root}"/*)
+      rm -rf "${target_dir}"
+      ;;
+    *)
+      echo "Refusing to remove path outside RESULT_DIR: ${target_dir}" >&2
+      exit 1
+      ;;
+  esac
 }
 
 sync_known_datasets
@@ -247,7 +332,7 @@ else
       )
       ;;
     *)
-      echo "Unknown EXPERIMENT='${EXPERIMENT}'. Update scripts/02_train_baseline.slurm required_files mapping." >&2
+      echo "Unknown EXPERIMENT='${EXPERIMENT}'. Update scripts/02_train_sbert.slurm required_files mapping." >&2
       exit 1
       ;;
   esac
@@ -278,10 +363,142 @@ for file_path in "${required_files[@]}"; do
   fi
 done
 
-python examples/train_with_config.py \
-  --config "${CONFIG_PATH}" \
-  --experiment "${EXPERIMENT}" \
-  --model-variant "${MODEL_VARIANT}" \
-  --data-mode "${DATA_MODE}" \
-  --epochs "${EPOCHS}" \
-  --seed "${SEED}" 2>&1 | tee "${LOG_FILE}"
+STS_TEST_PATH="${STS_PATH}/${STS_TEST_FILE}"
+if [ ! -f "${STS_TEST_PATH}" ]; then
+  echo "Missing required STS test file for evaluation: ${STS_TEST_PATH}" >&2
+  exit 1
+fi
+
+mkdir -p "${RESULT_DIR}"
+: > "${RUNS_JSONL}"
+
+echo "Result directory: ${RESULT_DIR}" | tee -a "${LOG_FILE}"
+echo "Model directory (overwritten each run): ${MODEL_DIR}" | tee -a "${LOG_FILE}"
+echo "Runs: ${NUM_RUNS}, seed_start=${SEED}, seed_step=${SEED_STEP}" | tee -a "${LOG_FILE}"
+
+for run_idx in $(seq 1 "${NUM_RUNS}"); do
+  run_seed=$((SEED + (run_idx - 1) * SEED_STEP))
+  echo "==== Run ${run_idx}/${NUM_RUNS} | seed=${run_seed} ====" | tee -a "${LOG_FILE}"
+
+  safe_cleanup_dir "${MODEL_DIR}"
+  mkdir -p "${MODEL_DIR}"
+
+  python examples/train_with_config.py \
+    --config "${CONFIG_PATH}" \
+    --experiment "${EXPERIMENT}" \
+    --model-variant "${MODEL_VARIANT}" \
+    --data-mode "${DATA_MODE}" \
+    --epochs "${EPOCHS}" \
+    --seed "${run_seed}" \
+    --output-path "${MODEL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+
+  safe_cleanup_dir "${EVAL_TMP_DIR}"
+  mkdir -p "${EVAL_TMP_DIR}"
+
+  python examples/evaluate_pretrained.py \
+    --model-name "${MODEL_DIR}" \
+    --sts-path "${STS_PATH}" \
+    --sts-test-file "${STS_TEST_FILE}" \
+    --batch-size "${BATCH_SIZE}" \
+    --seed "${run_seed}" \
+    --num-runs 1 \
+    --seed-step 1 \
+    --main-similarity "${MAIN_SIMILARITY}" \
+    --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+
+  python - "${EVAL_TMP_DIR}/summary.json" "${run_idx}" >> "${RUNS_JSONL}" <<'PY'
+import json
+import sys
+
+summary_path = sys.argv[1]
+run_index = int(sys.argv[2])
+
+with open(summary_path, encoding="utf-8") as f_in:
+    summary = json.load(f_in)
+
+run = summary["runs"][0]
+row = {
+    "run_index": run_index,
+    "seed": int(run["seed"]),
+    "score": float(run["score"]),
+    "metrics": run["metrics"],
+}
+print(json.dumps(row))
+PY
+done
+
+python - "${RUNS_JSONL}" "${SUMMARY_JSON}" "${SUMMARY_CSV}" "${MODEL_DIR}" "${NUM_RUNS}" "${SEED}" "${SEED_STEP}" "${MAIN_SIMILARITY}" "${STS_PATH}" "${STS_TEST_FILE}" <<'PY'
+import csv
+import json
+import statistics
+import sys
+
+runs_jsonl = sys.argv[1]
+summary_json = sys.argv[2]
+summary_csv = sys.argv[3]
+model_dir = sys.argv[4]
+num_runs = int(sys.argv[5])
+seed_start = int(sys.argv[6])
+seed_step = int(sys.argv[7])
+main_similarity = sys.argv[8]
+sts_path = sys.argv[9]
+sts_test_file = sys.argv[10]
+
+runs = []
+with open(runs_jsonl, encoding="utf-8") as f_in:
+    for line in f_in:
+        line = line.strip()
+        if line:
+            runs.append(json.loads(line))
+
+if not runs:
+    raise ValueError("No run records found in {}".format(runs_jsonl))
+
+scores = [float(r["score"]) for r in runs]
+aggregate = {
+    "score_mean": float(statistics.mean(scores)),
+    "score_std": float(statistics.stdev(scores)) if len(scores) > 1 else 0.0,
+}
+
+metric_keys = sorted(runs[0]["metrics"].keys())
+for key in metric_keys:
+    values = [float(r["metrics"][key]) for r in runs]
+    aggregate["{}_mean".format(key)] = float(statistics.mean(values))
+    aggregate["{}_std".format(key)] = float(statistics.stdev(values)) if len(values) > 1 else 0.0
+
+summary = {
+    "model_name": model_dir,
+    "sts_path": sts_path,
+    "sts_test_file": sts_test_file,
+    "main_similarity": main_similarity,
+    "num_runs": num_runs,
+    "seed_start": seed_start,
+    "seed_step": seed_step,
+    "seeds": [int(r["seed"]) for r in runs],
+    "aggregate": aggregate,
+    "runs": runs,
+}
+
+with open(summary_json, "w", encoding="utf-8") as f_out:
+    json.dump(summary, f_out, indent=2)
+
+with open(summary_csv, "w", newline="", encoding="utf-8") as f_out:
+    fieldnames = ["run_index", "seed", "score"] + metric_keys
+    writer = csv.DictWriter(f_out, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in runs:
+        out = {
+            "run_index": row["run_index"],
+            "seed": row["seed"],
+            "score": row["score"],
+        }
+        out.update(row["metrics"])
+        writer.writerow(out)
+PY
+
+safe_cleanup_dir "${EVAL_TMP_DIR}"
+
+echo "Finished ${NUM_RUNS} train+eval runs." | tee -a "${LOG_FILE}"
+echo "Summary JSON: ${SUMMARY_JSON}" | tee -a "${LOG_FILE}"
+echo "Summary CSV:  ${SUMMARY_CSV}" | tee -a "${LOG_FILE}"
+echo "Final model:  ${MODEL_DIR}" | tee -a "${LOG_FILE}"

@@ -29,6 +29,7 @@ def _parse_args():
     parser.add_argument("--model-variant", type=str, default=None, help="Runtime model variant key from config.runtime.model_variants")
     parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, sts+nli")
     parser.add_argument("--epochs", type=int, default=None, help="Runtime epoch override for stages that do not set num_epochs explicitly")
+    parser.add_argument("--output-path", type=str, default=None, help="Override output directory")
     return parser.parse_args()
 
 
@@ -367,7 +368,7 @@ def main():
     runtime_plan = _resolve_runtime_plan(config, args)
     if runtime_plan is not None:
         runtime_suffix = "{}_{}".format(_safe_name(runtime_plan["model_variant"]), _safe_name(runtime_plan["data_mode"]))
-        output_path = _build_output_path(args.experiment, config, suffix=runtime_suffix)
+        output_path = args.output_path or _build_output_path(args.experiment, config, suffix=runtime_suffix)
         logging.info("Runtime mode enabled: model_variant=%s, data_mode=%s", runtime_plan["model_variant"], runtime_plan["data_mode"])
         logging.info("Output path: %s", output_path)
 
@@ -413,7 +414,7 @@ def main():
     model = _build_model(config["model"])
     train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(config, model)
     training_cfg = config["training"]
-    output_path = _build_output_path(args.experiment, config)
+    output_path = args.output_path or _build_output_path(args.experiment, config)
     logging.info("Output path: %s", output_path)
 
     fit_kwargs = _build_fit_kwargs(
