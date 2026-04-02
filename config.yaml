@@ -1,0 +1,20 @@
+slurm:
+  train:
+    config_path: examples/config.yaml
+    experiment: runtime
+    model_variant: sbert_base
+    data_mode: sts
+    epochs: 4
+    seed: 42
+    data_auto_download: 1
+
+  eval:
+    model_name: bert-base-nli-mean-tokens
+    sts_path: datasets/stsbenchmark
+    sts_test_file: sts-test.csv
+    batch_size: 32
+    seed: 42
+    num_runs: 10
+    seed_step: 1
+    main_similarity: cosine
+    data_auto_download: 1

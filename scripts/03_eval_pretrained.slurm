@@ -29,26 +29,89 @@ PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
 PYTHON_MODULE="${PYTHON_MODULE:-python312}"
 CUDA_MODULE="${CUDA_MODULE:-cuda/12.8.0}"
-
-MODEL_NAME="${MODEL_NAME:-bert-base-nli-mean-tokens}"
-STS_PATH="${STS_PATH:-datasets/stsbenchmark}"
-STS_TEST_FILE="${STS_TEST_FILE:-sts-test.csv}"
-BATCH_SIZE="${BATCH_SIZE:-32}"
-SEED="${SEED:-42}"
-NUM_RUNS="${NUM_RUNS:-10}"
-SEED_STEP="${SEED_STEP:-1}"
-MAIN_SIMILARITY="${MAIN_SIMILARITY:-cosine}"
-SAFE_MODEL_NAME="${MODEL_NAME//\//_}"
-OUTPUT_DIR="${OUTPUT_DIR:-output/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}}"
-DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-1}"
+ROOT_RUNTIME_CONFIG="${ROOT_RUNTIME_CONFIG:-config.yaml}"
+MODEL_NAME="${MODEL_NAME:-}"
+STS_PATH="${STS_PATH:-}"
+STS_TEST_FILE="${STS_TEST_FILE:-}"
+BATCH_SIZE="${BATCH_SIZE:-}"
+SEED="${SEED:-}"
+NUM_RUNS="${NUM_RUNS:-}"
+SEED_STEP="${SEED_STEP:-}"
+MAIN_SIMILARITY="${MAIN_SIMILARITY:-}"
+OUTPUT_DIR="${OUTPUT_DIR:-}"
+DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-}"
 
 module purge
 module load "${PYTHON_MODULE}"
 module load "${CUDA_MODULE}"
 
 cd "${PROJECT_DIR}"
-mkdir -p output/slurm "${OUTPUT_DIR}"
+mkdir -p output/slurm
 source "${VENV_DIR}/bin/activate"
+
+read_root_cfg() {
+  local key="$1"
+  local fallback="$2"
+  python - "$ROOT_RUNTIME_CONFIG" "$key" "$fallback" <<'PY'
+import os
+import sys
+import yaml
+
+cfg_path, dotted_key, fallback = sys.argv[1], sys.argv[2], sys.argv[3]
+value = fallback
+
+if os.path.isfile(cfg_path):
+    with open(cfg_path, encoding="utf-8") as f_in:
+        loaded = yaml.safe_load(f_in) or {}
+    node = loaded
+    for part in dotted_key.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            node = None
+            break
+    if node is not None:
+        value = node
+
+if isinstance(value, bool):
+    value = "1" if value else "0"
+print(value)
+PY
+}
+
+if [ -z "${MODEL_NAME}" ]; then
+  MODEL_NAME="$(read_root_cfg "slurm.eval.model_name" "bert-base-nli-mean-tokens")"
+fi
+if [ -z "${STS_PATH}" ]; then
+  STS_PATH="$(read_root_cfg "slurm.eval.sts_path" "datasets/stsbenchmark")"
+fi
+if [ -z "${STS_TEST_FILE}" ]; then
+  STS_TEST_FILE="$(read_root_cfg "slurm.eval.sts_test_file" "sts-test.csv")"
+fi
+if [ -z "${BATCH_SIZE}" ]; then
+  BATCH_SIZE="$(read_root_cfg "slurm.eval.batch_size" "32")"
+fi
+if [ -z "${SEED}" ]; then
+  SEED="$(read_root_cfg "slurm.eval.seed" "42")"
+fi
+if [ -z "${NUM_RUNS}" ]; then
+  NUM_RUNS="$(read_root_cfg "slurm.eval.num_runs" "10")"
+fi
+if [ -z "${SEED_STEP}" ]; then
+  SEED_STEP="$(read_root_cfg "slurm.eval.seed_step" "1")"
+fi
+if [ -z "${MAIN_SIMILARITY}" ]; then
+  MAIN_SIMILARITY="$(read_root_cfg "slurm.eval.main_similarity" "cosine")"
+fi
+if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
+  DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.eval.data_auto_download" "1")"
+fi
+
+SAFE_MODEL_NAME="${MODEL_NAME//\//_}"
+if [ -z "${OUTPUT_DIR}" ]; then
+  OUTPUT_DIR="output/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}"
+fi
+mkdir -p "${OUTPUT_DIR}"
 
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false

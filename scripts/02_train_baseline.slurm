@@ -29,13 +29,14 @@ PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 VENV_DIR="${VENV_DIR:-$HOME/venvs/sbert024}"
 PYTHON_MODULE="${PYTHON_MODULE:-python312}"
 CUDA_MODULE="${CUDA_MODULE:-cuda/12.8.0}"
-CONFIG_PATH="${CONFIG_PATH:-examples/config.yaml}"
-EXPERIMENT="${EXPERIMENT:-runtime}"
-MODEL_VARIANT="${MODEL_VARIANT:-sbert_base}"
-DATA_MODE="${DATA_MODE:-sts}"
-EPOCHS="${EPOCHS:-4}"
-SEED="${SEED:-42}"
-DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-1}"
+ROOT_RUNTIME_CONFIG="${ROOT_RUNTIME_CONFIG:-config.yaml}"
+CONFIG_PATH="${CONFIG_PATH:-}"
+EXPERIMENT="${EXPERIMENT:-}"
+MODEL_VARIANT="${MODEL_VARIANT:-}"
+DATA_MODE="${DATA_MODE:-}"
+EPOCHS="${EPOCHS:-}"
+SEED="${SEED:-}"
+DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-}"
 
 module purge
 module load "${PYTHON_MODULE}"
@@ -44,6 +45,58 @@ module load "${CUDA_MODULE}"
 cd "${PROJECT_DIR}"
 mkdir -p output/slurm
 source "${VENV_DIR}/bin/activate"
+
+read_root_cfg() {
+  local key="$1"
+  local fallback="$2"
+  python - "$ROOT_RUNTIME_CONFIG" "$key" "$fallback" <<'PY'
+import os
+import sys
+import yaml
+
+cfg_path, dotted_key, fallback = sys.argv[1], sys.argv[2], sys.argv[3]
+value = fallback
+
+if os.path.isfile(cfg_path):
+    with open(cfg_path, encoding="utf-8") as f_in:
+        loaded = yaml.safe_load(f_in) or {}
+    node = loaded
+    for part in dotted_key.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            node = None
+            break
+    if node is not None:
+        value = node
+
+if isinstance(value, bool):
+    value = "1" if value else "0"
+print(value)
+PY
+}
+
+if [ -z "${CONFIG_PATH}" ]; then
+  CONFIG_PATH="$(read_root_cfg "slurm.train.config_path" "examples/config.yaml")"
+fi
+if [ -z "${EXPERIMENT}" ]; then
+  EXPERIMENT="$(read_root_cfg "slurm.train.experiment" "runtime")"
+fi
+if [ -z "${MODEL_VARIANT}" ]; then
+  MODEL_VARIANT="$(read_root_cfg "slurm.train.model_variant" "sbert_base")"
+fi
+if [ -z "${DATA_MODE}" ]; then
+  DATA_MODE="$(read_root_cfg "slurm.train.data_mode" "sts")"
+fi
+if [ -z "${EPOCHS}" ]; then
+  EPOCHS="$(read_root_cfg "slurm.train.epochs" "4")"
+fi
+if [ -z "${SEED}" ]; then
+  SEED="$(read_root_cfg "slurm.train.seed" "42")"
+fi
+if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
+  DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.train.data_auto_download" "1")"
+fi
 
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
@@ -102,8 +155,26 @@ normalize_flat_datasets() {
   done
 }
 
+build_contrastive_pairs_if_needed() {
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ]; then
+    local pairs_file="datasets/contrastive/pairs_train.tsv"
+    if [ ! -f "${pairs_file}" ]; then
+      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
+        echo "Building contrastive pairs for MNRL..."
+        python examples/datasets/build_contrastive_pairs.py \
+          --allnli-path datasets/AllNLI \
+          --sts-path datasets/stsbenchmark \
+          --output-path "${pairs_file}"
+      else
+        echo "Skip contrastive pair build for now: STS/NLI source files are not ready yet."
+      fi
+    fi
+  fi
+}
+
 sync_known_datasets
 normalize_flat_datasets
+build_contrastive_pairs_if_needed
 
 required_files=()
 if [ "${EXPERIMENT}" = "runtime" ]; then
@@ -134,8 +205,19 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/stsbenchmark/sts-test.csv"
       )
       ;;
+    sts_nli_mnrl)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+        "datasets/contrastive/pairs_train.tsv"
+      )
+      ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, or sts+nli (sts_nli)." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, sts+nli (sts_nli), or sts+nli+mnrl (sts_nli_mnrl)." >&2
       exit 1
       ;;
   esac
@@ -184,6 +266,7 @@ if [ "${missing_data}" -eq 1 ] && [ "${DATA_AUTO_DOWNLOAD}" = "1" ]; then
   python examples/datasets/get_data.py
   sync_known_datasets
   normalize_flat_datasets
+  build_contrastive_pairs_if_needed
 fi
 
 for file_path in "${required_files[@]}"; do
