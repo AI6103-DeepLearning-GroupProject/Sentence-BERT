@@ -1,20 +1,20 @@
 slurm:
   train:
-    config_path: examples/config.yaml
-    experiment: runtime
-    model_variant: sbert_base
-    data_mode: sts
-    epochs: 4
-    seed: 42
-    data_auto_download: 1
+    config_path: examples/config.yaml  # Training config file path; usually examples/config.yaml where experiments.* are defined.
+    experiment: runtime  # runtime | nli_bert | sts_bert | sts_continue_training_bert | wikipedia_triplet_bert; as of examples/config.yaml -> experiments.<name>
+    model_variant: sbert_base  # iff experiment=runtime; options: sbert_base | sbert_large | sroberta_base | sroberta_large; -> experiments.runtime.runtime.model_variants.<name>
+    data_mode: sts  # iff experiment=runtime; options: sts | nli | sts_nli(or sts+nli) | sts_nli_mnrl (or sts+nli+mnrl); -> experiments.runtime.runtime.data_modes.<name>
+    epochs: 4  # Used only when experiment=runtime to override stage default epochs (applies to stages without stage.training.num_epochs).
+    seed: 42  # Training random seed (passed to train_with_config.py --seed).
+    data_auto_download: 1  # Options: 0/1; 1 means auto-run examples/datasets/get_data.py when required files are missing.
 
   eval:
-    model_name: bert-base-nli-mean-tokens
-    sts_path: datasets/stsbenchmark
-    sts_test_file: sts-test.csv
-    batch_size: 32
-    seed: 42
-    num_runs: 10
-    seed_step: 1
-    main_similarity: cosine
-    data_auto_download: 1
+    model_name: bert-base-nli-mean-tokens  # HF model id or local model directory, e.g. bert-base-nli-mean-tokens or output/.../model.
+    sts_path: datasets/stsbenchmark  # STSBenchmark dataset directory.
+    sts_test_file: sts-test.csv  # Test file name under sts_path.
+    batch_size: 32  # Evaluation batch size.
+    seed: 42  # Start seed for multi-run evaluation.
+    num_runs: 10  # Number of evaluation runs with different seeds (e.g. 10 runs for mean/std aggregation).
+    seed_step: 1  # Seed increment per run; seed_i = seed + (i-1)*seed_step.
+    main_similarity: cosine  # Options: cosine | euclidean | manhattan | dot | max (max lets evaluator choose the best metric).
+    data_auto_download: 1  # Options: 0/1; 1 means auto-download STS files when missing.
