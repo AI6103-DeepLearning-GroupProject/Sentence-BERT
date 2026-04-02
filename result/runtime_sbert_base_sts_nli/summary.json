@@ -1,0 +1,205 @@
+{
+  "model_name": "output/training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23/",
+  "sts_path": "datasets/stsbenchmark",
+  "sts_test_file": "sts-test.csv",
+  "batch_size": 32,
+  "main_similarity": "cosine",
+  "num_runs": 10,
+  "seed_start": 42,
+  "seed_step": 1,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+  ],
+  "aggregate": {
+    "score_mean": 0.8529312164185052,
+    "score_std": 0.0,
+    "cosine_pearson_mean": 0.84281313,
+    "cosine_pearson_std": 0.0,
+    "cosine_spearman_mean": 0.8529312164185052,
+    "cosine_spearman_std": 0.0,
+    "dot_pearson_mean": 0.8106783,
+    "dot_pearson_std": 0.0,
+    "dot_spearman_mean": 0.8135630926939553,
+    "dot_spearman_std": 0.0,
+    "euclidean_pearson_mean": 0.849652,
+    "euclidean_pearson_std": 0.0,
+    "euclidean_spearman_mean": 0.8568093931181486,
+    "euclidean_spearman_std": 0.0,
+    "manhattan_pearson_mean": 0.8493765,
+    "manhattan_pearson_std": 0.0,
+    "manhattan_spearman_mean": 0.8561002563318626,
+    "manhattan_spearman_std": 0.0
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "seed": 42,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_01_seed_42"
+    },
+    {
+      "run_index": 2,
+      "seed": 43,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_02_seed_43"
+    },
+    {
+      "run_index": 3,
+      "seed": 44,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_03_seed_44"
+    },
+    {
+      "run_index": 4,
+      "seed": 45,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_04_seed_45"
+    },
+    {
+      "run_index": 5,
+      "seed": 46,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_05_seed_46"
+    },
+    {
+      "run_index": 6,
+      "seed": 47,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_06_seed_47"
+    },
+    {
+      "run_index": 7,
+      "seed": 48,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_07_seed_48"
+    },
+    {
+      "run_index": 8,
+      "seed": 49,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_08_seed_49"
+    },
+    {
+      "run_index": 9,
+      "seed": 50,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_09_seed_50"
+    },
+    {
+      "run_index": 10,
+      "seed": 51,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      },
+      "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173/run_10_seed_51"
+    }
+  ],
+  "output_path": "output/eval_pretrained_output_training_runtime_sbert_base_sts_nli-2026-04-02_13-34-23__17173"
+}
