@@ -88,31 +88,95 @@
 \maketitle
 
 \begin{abstract}
-
-\lipsum[1] % Placeholder
-
-Report writing based on the AAAI template \cite{aaai24_template}.
+This project revisits the original Sentence-BERT (SBERT) recipe on the legacy
+sentence-transformers v0.2.4 codebase (Dec 2019) and evaluates reproducibility under a Slurm HPC environment.
+Our practical objective is to identify low-compute improvements that remain compatible with a 2019-era training stack.
+We first establish a reproducible baseline around BERT-based SBERT training and STSBenchmark evaluation,
+then prepare an extensible runtime configuration for controlled comparison across model variants and data curricula.
+This report summarizes the current pipeline and preliminary results.
 \end{abstract}
 
 \section{Introduction}
+Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert} addresses the inefficiency of cross-encoder sentence-pair
+inference by learning fixed-size sentence embeddings that can be compared with simple similarity functions.
+This design dramatically reduces pairwise search cost while retaining strong semantic textual similarity (STS) performance.
 
-\lipsum[1] % Placeholder
+In this course project, we reproduce and extend the early SBERT setting using the original-style implementation
+on sentence-transformers v0.2.4 (Dec 2019). The engineering target is not to maximize raw leaderboard performance with modern
+large-scale pretraining, but to obtain measurable gains under constrained compute and reproducible Slurm execution.
+
+Our current milestone focuses on:
+\begin{itemize}
+    \item Building robust Slurm scripts for data setup, training, and evaluation.
+    \item Unifying runtime options via YAML configuration.
+    \item Establishing a stable baseline before testing enhanced training objectives.
+\end{itemize}
 
 \section{Related Works}
+The core reference is Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert},
+which adapts BERT \cite{devlin-etal-2019-bert} into a siamese/triplet framework for efficient
+sentence embedding learning. The original paper reports strong transfer performance on STS tasks
+with dramatically faster semantic search compared with vanilla BERT pairwise inference.
 
-\lipsum[1] % Placeholder
+Our implementation scope currently follows the original SBERT spirit:
+NLI/STS-driven supervised fine-tuning, pooling-based sentence embeddings, and STSBenchmark-based reporting.
+The extension path in this project emphasizes lightweight training-strategy upgrades (e.g., multi-stage curricula)
+that can be integrated into the legacy codebase with low engineering overhead.
 
 \section{Experiment Setups}
+\textbf{Codebase.}
+We use a legacy Sentence-BERT repository aligned with sentence-transformers v0.2.4 (2019-style workflow).
 
-\lipsum[1] % Placeholder
+\textbf{Execution environment.}
+All experiments are executed using Single GPU NVIDIA L40S.
+
+\textbf{Dataset protocol.}
+The current evaluation target is STSBenchmark test split (\texttt{sts-test.csv}).
+Training/evaluation scripts are configured to normalize expected dataset paths and optionally auto-download
+required files when missing.
+
+\textbf{Metrics.}
+We report Pearson and Spearman correlations under cosine, Manhattan, Euclidean, and dot-product similarities.
+For multi-seed evaluation, we aggregate mean and standard deviation over repeated runs.
 
 \section{Methodology}
+The current baseline pipeline follows the pretrained SBERT-style model evaluation protocol.
+Given a model checkpoint (or model identifier), we encode sentence pairs from STSBenchmark and compute similarity scores.
+The evaluator then reports correlation with gold STS labels.
 
-\lipsum[1] % Placeholder
+Our runtime framework already supports configurable combinations of:
+\begin{itemize}
+    \item Model variant: SBERT-base / SBERT-large / SRoBERTa-base / SRoBERTa-large.
+    \item Data mode: STS-only, NLI-only, STS+NLI, and STS+NLI+MNRL staged training.
+    \item Epoch and seed controls through YAML and Slurm environment overrides.
+\end{itemize}
+
+At this stage, only one complete evaluation run group has finished. Additional training runs and ablations
+will be filled into the same reporting format.
 
 \section{Results and Analysis}
+Table~\ref{tab:main-results} summarizes the current status. Only one test setting has been completed so far.
+The remaining entries are intentionally left blank for subsequent experiments.
 
-\lipsum[1] % Placeholder
+\begin{table}[t]
+\centering
+\caption{Current experiment results on STSBenchmark test set (mean taken for 10 runs).}
+\label{tab:main-results}
+\begin{tabular}{lcccc}
+\hline
+Setting & Cosine Pearson & Cosine Spearman \\
+\hline
+Pretrained & 0.7415 & 0.7698 \\
+Baseline \texttt{sts} &  &  \\
+Baseline \texttt{sts\_nli} &  &  \\
+Enhanced \texttt{mnrl} &  &  \\
+\hline
+\end{tabular}
+\end{table}
+
+The completed setting provides a functional reference point for verifying the evaluation pipeline.
+Since only one model setting has been fully reported, no strong comparative conclusion is drawn yet.
+The next step is to populate the blank rows with trained checkpoints under identical evaluation settings.
 
 \section{Ablation Study}
 
