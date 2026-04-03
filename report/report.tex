@@ -155,21 +155,21 @@ At this stage, only one complete evaluation run group has finished. Additional t
 will be filled into the same reporting format.
 
 \section{Results and Analysis}
-Table~\ref{tab:main-results} summarizes the current status. Only one test setting has been completed so far.
-The remaining entries are intentionally left blank for subsequent experiments.
+Table~\ref{tab:sts-benchmark-mnrl-results} summarizes the MNRL-enhanced setting under the cosine similarity metric, 
+reporting mean and standard deviation over 3 runs with different random seeds. Since the SBERT paper tooks cosine Spearman as the main metric and presented that Pearson is not suitable for STS tasks, we report Cosine Spearman here.
 
-\begin{table}[t]
+\begin{table}[ht]
 \centering
-\caption{Current experiment results on STSBenchmark test set (mean taken for 3 runs).}
-\label{tab:main-results}
+\caption{Current experiment results on STSBenchmark test set ($\texttt{mean} \pm \texttt{std}$).}
+\label{tab:sts-benchmark-mnrl-results}
 \begin{tabular}{lcccc}
 \hline
-Setting & Cosine Pearson & Cosine Spearman \\
+Setting & Cosine Spearman \\
 \hline
-Pretrained & 0.7415 & 0.7698 \\
-Baseline \texttt{sts} & 0.8465 & 0.8440 \\
-Baseline \texttt{sts\_nli} & 0.8428  & 0.8529  \\
-Enhanced \texttt{mnrl} & \textbf{0.8553}  & \textbf{0.8596}  \\
+Pretrained & $76.98\% \pm 0.34\%$ \\
+Baseline \texttt{sts} & $84.40\% \pm 0.40\%$ \\
+Baseline \texttt{sts+nli} & $84.85\% \pm 0.47\%$  \\
+Enhanced \texttt{sts+nli+mnrl} & \textbf{$85.38\% \pm 0.77\%$}  \\
 \hline
 \end{tabular}
 \end{table}
