@@ -1,0 +1,33 @@
+slurm:
+  train:
+    config_path: examples/config.yaml  # Training config file path; usually examples/config.yaml where experiments.* are defined.
+    experiment: runtime  # runtime | nli_bert | sts_bert | sts_continue_training_bert | wikipedia_triplet_bert; as of examples/config.yaml -> experiments.<name>
+    model_variant: sbert_base  # iff experiment=runtime; options: sbert_base | sbert_large | sroberta_base | sroberta_large; -> experiments.runtime.runtime.model_variants.<name>
+    data_mode: wikipedia_triplet  # iff experiment=runtime; options: sts | nli | sts_nli(or sts+nli) | sts_nli_mnrl(or sts+nli+mnrl) | wikipedia_triplet | wikipedia_triplet_mnrl; -> experiments.runtime.runtime.data_modes.<name>
+    epochs: 4  # Used only when experiment=runtime to override stage default epochs (applies to stages without stage.training.num_epochs).
+    seed: 42  # Training random seed (passed to train_with_config.py --seed).
+    num_runs: 3  # Number of train+eval cycles in scripts/02_train_sbert.slurm (different seeds across runs).
+    seed_step: 1  # Seed increment between training runs; run_i seed = seed + (i-1)*seed_step.
+    result_dir: ""  # Optional fixed result folder for combined train+eval artifacts; empty means auto path under result/.
+    data_auto_download: 1  # Options: 0/1; 1 means auto-run examples/datasets/get_data.py when required files are missing.
+
+  eval:
+    task_type: auto  # sts | triplet | auto; in scripts/02_train_sbert.slurm, auto picks triplet for wikipedia_* modes and sts otherwise.
+    model_name: bert-base-nli-mean-tokens  # HF model id or local model directory, e.g. bert-base-nli-mean-tokens or output/.../model.
+    sts_path: datasets/stsbenchmark  # STSBenchmark dataset directory.
+    sts_test_file: sts-test.csv  # Test file name under sts_path.
+    triplet_path: datasets/wikipedia-sections-triplets  # Triplet dataset directory for wikipedia evaluations.
+    triplet_test_file: test.csv  # Triplet test file name under triplet_path.
+    triplet_s1_col_idx: 1  # Anchor column index in triplet CSV.
+    triplet_s2_col_idx: 2  # Positive column index in triplet CSV.
+    triplet_s3_col_idx: 3  # Negative column index in triplet CSV.
+    triplet_delimiter: ","  # Triplet CSV delimiter.
+    triplet_quoting: QUOTE_MINIMAL  # Triplet CSV quoting mode in Python csv module naming.
+    triplet_has_header: 1  # 1 if triplet CSV has header, else 0.
+    batch_size: 32  # Evaluation batch size.
+    seed: 42  # Start seed for multi-run evaluation.
+    num_runs: 10  # Number of evaluation runs with different seeds (e.g. 10 runs for mean/std aggregation).
+    seed_step: 1  # Seed increment per run; seed_i = seed + (i-1)*seed_step.
+    main_similarity: cosine  # Options: cosine | euclidean | manhattan | dot | max (max lets evaluator choose the best metric).
+    main_distance: cosine  # Triplet main score distance: cosine | euclidean | manhattan | max.
+    data_auto_download: 1  # Options: 0/1; 1 means auto-download STS files when missing.

@@ -1,0 +1,35 @@
+{
+  "model_name": "result/runtime_sbert_base_wikipedia_triplet/model",
+  "evaluation_task": "triplet",
+  "num_runs": 1,
+  "seed_start": 42,
+  "seed_step": 1,
+  "seeds": [
+    42
+  ],
+  "aggregate": {
+    "score_mean": 0.8044914490238028,
+    "score_std": 0.0,
+    "accuracy_cosinus_mean": 0.8044914490238028,
+    "accuracy_cosinus_std": 0.0,
+    "accuracy_euclidean_mean": 0.8055320084141785,
+    "accuracy_euclidean_std": 0.0,
+    "accuracy_manhatten_mean": 0.8052673833967985,
+    "accuracy_manhatten_std": 0.0
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "seed": 42,
+      "score": 0.8044914490238028,
+      "metrics": {
+        "accuracy_cosinus": 0.8044914490238028,
+        "accuracy_manhatten": 0.8052673833967985,
+        "accuracy_euclidean": 0.8055320084141785
+      }
+    }
+  ],
+  "main_distance": "cosine",
+  "triplet_path": "datasets/wikipedia-sections-triplets",
+  "triplet_test_file": "test.csv"
+}

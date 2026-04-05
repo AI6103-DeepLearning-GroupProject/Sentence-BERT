@@ -1,0 +1,193 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage{aaai24}  % DO NOT CHANGE THIS
+\usepackage{times}  % DO NOT CHANGE THIS
+\usepackage{helvet}  % DO NOT CHANGE THIS
+\usepackage{courier}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\setlength{\pdfpagewidth}{8.5in}  % DO NOT CHANGE THIS
+\setlength{\pdfpageheight}{11in}  % DO NOT CHANGE THIS
+\usepackage{amsmath}
+\usepackage{placeins}  % Fix the random figure placement by LaTeX
+\usepackage{lipsum}
+
+% DISALLOWED PACKAGES
+% \usepackage{authblk} -- This package is specifically forbidden
+% \usepackage{balance} -- This package is specifically forbidden
+% \usepackage{color (if used in text)
+% \usepackage{CJK} -- This package is specifically forbidden
+% \usepackage{float} -- This package is specifically forbidden
+% \usepackage{flushend} -- This package is specifically forbidden
+% \usepackage{fontenc} -- This package is specifically forbidden
+% \usepackage{fullpage} -- This package is specifically forbidden
+% \usepackage{geometry} -- This package is specifically forbidden
+% \usepackage{grffile} -- This package is specifically forbidden
+% \usepackage{hyperref} -- This package is specifically forbidden
+% \usepackage{navigator} -- This package is specifically forbidden
+% (or any other package that embeds links such as navigator or hyperref)
+% \indentfirst} -- This package is specifically forbidden
+% \layout} -- This package is specifically forbidden
+% \multicol} -- This package is specifically forbidden
+% \nameref} -- This package is specifically forbidden
+% \usepackage{savetrees} -- This package is specifically forbidden
+% \usepackage{setspace} -- This package is specifically forbidden
+% \usepackage{stfloats} -- This package is specifically forbidden
+% \usepackage{tabu} -- This package is specifically forbidden
+% \usepackage{titlesec} -- This package is specifically forbidden
+% \usepackage{tocbibind} -- This package is specifically forbidden
+% \usepackage{ulem} -- This package is specifically forbidden
+% \usepackage{wrapfig} -- This package is specifically forbidden
+
+% DISALLOWED COMMANDS
+% \nocopyright -- Your paper will not be published if you use this command
+% \addtolength -- This command may not be used
+% \balance -- This command may not be used
+% \baselinestretch -- Your paper will not be published if you use this command
+% \clearpage -- No page breaks of any kind may be used for the final version of your paper
+% \columnsep -- This command may not be used
+% \newpage -- No page breaks of any kind may be used for the final version of your paper
+% \pagebreak -- No page breaks of any kind may be used for the final version of your paperr
+% \pagestyle -- This command may not be used
+% \tiny -- This is not an acceptable font size.
+% \vspace{- -- No negative value may be used in proximity of a caption, figure, table, section, subsection, subsubsection, or reference
+% \vskip{- -- No negative value may be used to alter spacing above or below a caption, figure, table, section, subsection, subsubsection, or reference
+
+% Keep the \pdfinfo as shown here. No need to add /Title or /Author tags.
+\pdfinfo{
+/TemplateVersion (2024.1)
+}
+
+\setcounter{secnumdepth}{1}
+
+% Title should use Title Case.
+\title{AI6103 - Deep Learning Group Project Report}
+
+\author{Zhang Yanhai}
+
+\author{Anonymous Author}
+
+\author{Anonymous Author}
+
+\author{Anonymous Author}
+
+\author{Anonymous Author}
+
+\author{Anonymous Author}
+
+\affiliations{
+    Nanyang Technological University
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This project revisits the original Sentence-BERT (SBERT) recipe on the legacy
+sentence-transformers v0.2.4 codebase (Dec 2019) and evaluates reproducibility under a Slurm HPC environment.
+Our practical objective is to identify low-compute improvements that remain compatible with a 2019-era training stack.
+We first establish a reproducible baseline around BERT-based SBERT training and STSBenchmark evaluation,
+then prepare an extensible runtime configuration for controlled comparison across model variants and data curricula.
+This report summarizes the current pipeline and preliminary results.
+\end{abstract}
+
+\section{Introduction}
+Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert} addresses the inefficiency of cross-encoder sentence-pair
+inference by learning fixed-size sentence embeddings that can be compared with simple similarity functions.
+This design dramatically reduces pairwise search cost while retaining strong semantic textual similarity (STS) performance.
+
+In this course project, we reproduce and extend the early SBERT setting using the original-style implementation
+on sentence-transformers v0.2.4 (Dec 2019). The engineering target is not to maximize raw leaderboard performance with modern
+large-scale pretraining, but to obtain measurable gains under constrained compute and reproducible Slurm execution.
+
+Our current milestone focuses on:
+\begin{itemize}
+    \item Building robust Slurm scripts for data setup, training, and evaluation.
+    \item Unifying runtime options via YAML configuration.
+    \item Establishing a stable baseline before testing enhanced training objectives.
+\end{itemize}
+
+\section{Related Works}
+The core reference is Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert},
+which adapts BERT \cite{devlin-etal-2019-bert} into a siamese/triplet framework for efficient
+sentence embedding learning. The original paper reports strong transfer performance on STS tasks
+with dramatically faster semantic search compared with vanilla BERT pairwise inference.
+
+Our implementation scope currently follows the original SBERT spirit:
+NLI/STS-driven supervised fine-tuning, pooling-based sentence embeddings, and STSBenchmark-based reporting.
+The extension path in this project emphasizes lightweight training-strategy upgrades (e.g., multi-stage curricula)
+that can be integrated into the legacy codebase with low engineering overhead.
+
+\section{Experiment Setups}
+\textbf{Codebase.}
+We use a legacy Sentence-BERT repository aligned with sentence-transformers v0.2.4 (2019-style workflow).
+
+\textbf{Execution environment.}
+All experiments are executed using Single GPU NVIDIA L40S.
+
+\textbf{Dataset protocol.}
+The current evaluation target is STSBenchmark test split (\texttt{sts-test.csv}).
+Training/evaluation scripts are configured to normalize expected dataset paths and optionally auto-download
+required files when missing.
+
+\textbf{Metrics.}
+We report Pearson and Spearman correlations under cosine, Manhattan, Euclidean, and dot-product similarities.
+For multi-seed evaluation, we aggregate mean and standard deviation over repeated runs.
+
+\section{Methodology}
+The current baseline pipeline follows the pretrained SBERT-style model evaluation protocol.
+Given a model checkpoint (or model identifier), we encode sentence pairs from STSBenchmark and compute similarity scores.
+The evaluator then reports correlation with gold STS labels.
+
+Our runtime framework already supports configurable combinations of:
+\begin{itemize}
+    \item Model variant: SBERT-base / SBERT-large / SRoBERTa-base / SRoBERTa-large.
+    \item Data mode: STS-only, NLI-only, STS+NLI, and STS+NLI+MNRL staged training.
+    \item Epoch and seed controls through YAML and Slurm environment overrides.
+\end{itemize}
+
+At this stage, only one complete evaluation run group has finished. Additional training runs and ablations
+will be filled into the same reporting format.
+
+\section{Results and Analysis}
+Table~\ref{tab:sts-benchmark-mnrl-results} summarizes the MNRL-enhanced setting under the cosine similarity metric, 
+reporting mean and standard deviation over 3 runs with different random seeds. Since the SBERT paper tooks cosine Spearman as the main metric and presented that Pearson is not suitable for STS tasks, we report Cosine Spearman here.
+
+\begin{table}[ht]
+\centering
+\caption{Current experiment results on STSBenchmark test set ($\texttt{mean} \pm \texttt{std}$).}
+\label{tab:sts-benchmark-mnrl-results}
+\begin{tabular}{lcccc}
+\hline
+Setting & Cosine Spearman \\
+\hline
+Pretrained & $76.98\% \pm 0.34\%$ \\
+Baseline \texttt{sts} & $84.40\% \pm 0.40\%$ \\
+Baseline \texttt{sts+nli} & $84.85\% \pm 0.47\%$  \\
+Enhanced \texttt{sts+nli+mnrl} & \textbf{$85.38\% \pm 0.77\%$}  \\
+\hline
+\end{tabular}
+\end{table}
+
+The completed setting provides a functional reference point for verifying the evaluation pipeline.
+Since only one model setting has been fully reported, no strong comparative conclusion is drawn yet.
+The next step is to populate the blank rows with trained checkpoints under identical evaluation settings.
+
+\section{Ablation Study}
+
+\lipsum[1] % Placeholder
+
+\section{Conclusion}
+
+\lipsum[1] % Placeholder
+
+\bigskip
+
+\bibliography{aaai24}
+
+\end{document}

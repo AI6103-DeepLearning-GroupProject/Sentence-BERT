@@ -1,0 +1,81 @@
+{
+  "model_name": "result/runtime_sbert_base_sts_nli/model",
+  "sts_path": "datasets/stsbenchmark",
+  "sts_test_file": "sts-test.csv",
+  "main_similarity": "cosine",
+  "num_runs": 3,
+  "seed_start": 42,
+  "seed_step": 1,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "aggregate": {
+    "score_mean": 0.8485265172422466,
+    "score_std": 0.0047423944005771795,
+    "cosine_pearson_mean": 0.8388787333333334,
+    "cosine_pearson_std": 0.005220108884710467,
+    "cosine_spearman_mean": 0.8485265172422466,
+    "cosine_spearman_std": 0.0047423944005771795,
+    "dot_pearson_mean": 0.8078907333333333,
+    "dot_pearson_std": 0.0024232939696481833,
+    "dot_spearman_mean": 0.8095204074996707,
+    "dot_spearman_std": 0.0036374505491975984,
+    "euclidean_pearson_mean": 0.8452329533333334,
+    "euclidean_pearson_std": 0.0049076290644804255,
+    "euclidean_spearman_mean": 0.8511951205831249,
+    "euclidean_spearman_std": 0.005622691029132949,
+    "manhattan_pearson_mean": 0.8451281866666667,
+    "manhattan_pearson_std": 0.0050964228555461805,
+    "manhattan_spearman_mean": 0.8508351418447064,
+    "manhattan_spearman_std": 0.005542150711258116
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "seed": 42,
+      "score": 0.8529312164185052,
+      "metrics": {
+        "cosine_pearson": 0.84281313,
+        "cosine_spearman": 0.8529312164185052,
+        "euclidean_pearson": 0.849652,
+        "euclidean_spearman": 0.8568093931181486,
+        "manhattan_pearson": 0.8493765,
+        "manhattan_spearman": 0.8561002563318626,
+        "dot_pearson": 0.8106783,
+        "dot_spearman": 0.8135630926939553
+      }
+    },
+    {
+      "run_index": 2,
+      "seed": 43,
+      "score": 0.8491418393038356,
+      "metrics": {
+        "cosine_pearson": 0.84086627,
+        "cosine_spearman": 0.8491418393038356,
+        "euclidean_pearson": 0.8460957,
+        "euclidean_spearman": 0.8512119199267683,
+        "manhattan_pearson": 0.8465307,
+        "manhattan_spearman": 0.8513528800768182,
+        "dot_pearson": 0.8067078,
+        "dot_spearman": 0.8065123689955784
+      }
+    },
+    {
+      "run_index": 3,
+      "seed": 44,
+      "score": 0.8435064960043991,
+      "metrics": {
+        "cosine_pearson": 0.8329568,
+        "cosine_spearman": 0.8435064960043991,
+        "euclidean_pearson": 0.83995116,
+        "euclidean_spearman": 0.8455640487044578,
+        "manhattan_pearson": 0.83947736,
+        "manhattan_spearman": 0.8450522891254384,
+        "dot_pearson": 0.8062861,
+        "dot_spearman": 0.8084857608094783
+      }
+    }
+  ]
+}
