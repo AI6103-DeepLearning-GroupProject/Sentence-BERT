@@ -20,8 +20,8 @@
 #SBATCH --time=320
 #
 #SBATCH --job-name=sbert_eval
-#SBATCH --output=output/slurm/%x-%j.out
-#SBATCH --error=output/slurm/%x-%j.err
+#SBATCH --output=result/logs/%x-%j.out
+#SBATCH --error=result/logs/%x-%j.err
 
 set -euo pipefail
 
@@ -46,7 +46,7 @@ module load "${PYTHON_MODULE}"
 module load "${CUDA_MODULE}"
 
 cd "${PROJECT_DIR}"
-mkdir -p output/slurm
+mkdir -p result/logs
 source "${VENV_DIR}/bin/activate"
 
 read_root_cfg() {
@@ -116,7 +116,7 @@ mkdir -p "${OUTPUT_DIR}"
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 
-LOG_FILE="output/slurm/eval_${SAFE_MODEL_NAME}-${SLURM_JOB_ID}.log"
+LOG_FILE="result/logs/eval_${SAFE_MODEL_NAME}-${SLURM_JOB_ID}.log"
 STS_TEST_PATH="${STS_PATH}/${STS_TEST_FILE}"
 
 sync_stsbenchmark() {

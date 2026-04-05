@@ -20,8 +20,8 @@
 #SBATCH --time=360
 #
 #SBATCH --job-name=train_SBERT
-#SBATCH --output=output/slurm/%x-%j.out
-#SBATCH --error=output/slurm/%x-%j.err
+#SBATCH --output=result/logs/%x-%j.out
+#SBATCH --error=result/logs/%x-%j.err
 
 set -euo pipefail
 
@@ -42,18 +42,30 @@ SEED_STEP="${SEED_STEP:-}"
 RESULT_DIR="${RESULT_DIR:-}"
 MODEL_DIR="${MODEL_DIR:-}"
 
+EVAL_TASK="${EVAL_TASK:-}"
+BATCH_SIZE="${BATCH_SIZE:-}"
+DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-}"
+
 STS_PATH="${STS_PATH:-}"
 STS_TEST_FILE="${STS_TEST_FILE:-}"
-BATCH_SIZE="${BATCH_SIZE:-}"
 MAIN_SIMILARITY="${MAIN_SIMILARITY:-}"
-DATA_AUTO_DOWNLOAD="${DATA_AUTO_DOWNLOAD:-}"
+
+TRIPLET_PATH="${TRIPLET_PATH:-}"
+TRIPLET_TEST_FILE="${TRIPLET_TEST_FILE:-}"
+MAIN_DISTANCE="${MAIN_DISTANCE:-}"
+TRIPLET_S1_COL_IDX="${TRIPLET_S1_COL_IDX:-}"
+TRIPLET_S2_COL_IDX="${TRIPLET_S2_COL_IDX:-}"
+TRIPLET_S3_COL_IDX="${TRIPLET_S3_COL_IDX:-}"
+TRIPLET_DELIMITER="${TRIPLET_DELIMITER:-}"
+TRIPLET_QUOTING="${TRIPLET_QUOTING:-}"
+TRIPLET_HAS_HEADER="${TRIPLET_HAS_HEADER:-}"
 
 module purge
 module load "${PYTHON_MODULE}"
 module load "${CUDA_MODULE}"
 
 cd "${PROJECT_DIR}"
-mkdir -p output/slurm
+mkdir -p result/logs
 source "${VENV_DIR}/bin/activate"
 
 read_root_cfg() {
@@ -113,17 +125,47 @@ fi
 if [ -z "${RESULT_DIR}" ]; then
   RESULT_DIR="$(read_root_cfg "slurm.train.result_dir" "")"
 fi
+if [ -z "${EVAL_TASK}" ]; then
+  EVAL_TASK="$(read_root_cfg "slurm.eval.task_type" "auto")"
+fi
+if [ -z "${BATCH_SIZE}" ]; then
+  BATCH_SIZE="$(read_root_cfg "slurm.eval.batch_size" "32")"
+fi
 if [ -z "${STS_PATH}" ]; then
   STS_PATH="$(read_root_cfg "slurm.eval.sts_path" "datasets/stsbenchmark")"
 fi
 if [ -z "${STS_TEST_FILE}" ]; then
   STS_TEST_FILE="$(read_root_cfg "slurm.eval.sts_test_file" "sts-test.csv")"
 fi
-if [ -z "${BATCH_SIZE}" ]; then
-  BATCH_SIZE="$(read_root_cfg "slurm.eval.batch_size" "32")"
-fi
 if [ -z "${MAIN_SIMILARITY}" ]; then
   MAIN_SIMILARITY="$(read_root_cfg "slurm.eval.main_similarity" "cosine")"
+fi
+if [ -z "${TRIPLET_PATH}" ]; then
+  TRIPLET_PATH="$(read_root_cfg "slurm.eval.triplet_path" "datasets/wikipedia-sections-triplets")"
+fi
+if [ -z "${TRIPLET_TEST_FILE}" ]; then
+  TRIPLET_TEST_FILE="$(read_root_cfg "slurm.eval.triplet_test_file" "test.csv")"
+fi
+if [ -z "${MAIN_DISTANCE}" ]; then
+  MAIN_DISTANCE="$(read_root_cfg "slurm.eval.main_distance" "cosine")"
+fi
+if [ -z "${TRIPLET_S1_COL_IDX}" ]; then
+  TRIPLET_S1_COL_IDX="$(read_root_cfg "slurm.eval.triplet_s1_col_idx" "1")"
+fi
+if [ -z "${TRIPLET_S2_COL_IDX}" ]; then
+  TRIPLET_S2_COL_IDX="$(read_root_cfg "slurm.eval.triplet_s2_col_idx" "2")"
+fi
+if [ -z "${TRIPLET_S3_COL_IDX}" ]; then
+  TRIPLET_S3_COL_IDX="$(read_root_cfg "slurm.eval.triplet_s3_col_idx" "3")"
+fi
+if [ -z "${TRIPLET_DELIMITER}" ]; then
+  TRIPLET_DELIMITER="$(read_root_cfg "slurm.eval.triplet_delimiter" ",")"
+fi
+if [ -z "${TRIPLET_QUOTING}" ]; then
+  TRIPLET_QUOTING="$(read_root_cfg "slurm.eval.triplet_quoting" "QUOTE_MINIMAL")"
+fi
+if [ -z "${TRIPLET_HAS_HEADER}" ]; then
+  TRIPLET_HAS_HEADER="$(read_root_cfg "slurm.eval.triplet_has_header" "1")"
 fi
 if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
   DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.train.data_auto_download" "")"
@@ -150,6 +192,20 @@ export TOKENIZERS_PARALLELISM=false
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 
 DATA_MODE_NORM="$(echo "${DATA_MODE}" | tr '[:upper:]' '[:lower:]' | tr '+-' '__')"
+
+if [ "${EVAL_TASK}" = "auto" ]; then
+  if [ "${EXPERIMENT}" = "wikipedia_triplet_bert" ] || [ "${DATA_MODE_NORM}" = "wikipedia_triplet" ] || [ "${DATA_MODE_NORM}" = "wikipedia_triplet_mnrl" ]; then
+    EVAL_TASK="triplet"
+  else
+    EVAL_TASK="sts"
+  fi
+fi
+
+if [ "${EVAL_TASK}" != "sts" ] && [ "${EVAL_TASK}" != "triplet" ]; then
+  echo "EVAL_TASK must be one of: sts, triplet, auto. Got: ${EVAL_TASK}" >&2
+  exit 1
+fi
+
 if [ -z "${RESULT_DIR}" ]; then
   if [ "${EXPERIMENT}" = "runtime" ]; then
     RESULT_DIR="result/${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}"
@@ -167,9 +223,9 @@ SUMMARY_JSON="${RESULT_DIR}/summary.json"
 SUMMARY_CSV="${RESULT_DIR}/summary_table.csv"
 
 if [ "${EXPERIMENT}" = "runtime" ]; then
-  LOG_FILE="output/slurm/${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}-${SLURM_JOB_ID}.log"
+  LOG_FILE="result/logs/${EXPERIMENT}_${MODEL_VARIANT}_${DATA_MODE_NORM}-${SLURM_JOB_ID}.log"
 else
-  LOG_FILE="output/slurm/${EXPERIMENT}-${SLURM_JOB_ID}.log"
+  LOG_FILE="result/logs/${EXPERIMENT}-${SLURM_JOB_ID}.log"
 fi
 
 sync_known_datasets() {
@@ -220,16 +276,37 @@ normalize_flat_datasets() {
 
 build_contrastive_pairs_if_needed() {
   if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ]; then
-    local pairs_file="datasets/contrastive/pairs_train.tsv"
-    if [ ! -f "${pairs_file}" ]; then
+    local sts_pairs_file="datasets/contrastive/pairs_train.tsv"
+    if [ ! -f "${sts_pairs_file}" ]; then
       if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
-        echo "Building contrastive pairs for MNRL..."
+        echo "Building STS/NLI contrastive pairs for MNRL..."
         python examples/datasets/build_contrastive_pairs.py \
           --allnli-path datasets/AllNLI \
           --sts-path datasets/stsbenchmark \
-          --output-path "${pairs_file}"
+          --output-path "${sts_pairs_file}"
       else
-        echo "Skip contrastive pair build for now: STS/NLI source files are not ready yet."
+        echo "Skip STS/NLI pair build for now: source files are not ready yet."
+      fi
+    fi
+  fi
+
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "wikipedia_triplet_mnrl" ]; then
+    local wiki_pairs_file="datasets/contrastive/wikipedia_pairs_train.tsv"
+    local wiki_train_file="datasets/wikipedia-sections-triplets/train.csv"
+    if [ ! -f "${wiki_pairs_file}" ]; then
+      if [ -f "${wiki_train_file}" ]; then
+        echo "Building wikipedia contrastive pairs for MNRL..."
+        python examples/datasets/build_wikipedia_pairs.py \
+          --triplet-train-file "${wiki_train_file}" \
+          --output-path "${wiki_pairs_file}" \
+          --s1-col-idx "${TRIPLET_S1_COL_IDX}" \
+          --s2-col-idx "${TRIPLET_S2_COL_IDX}" \
+          --delimiter "${TRIPLET_DELIMITER}" \
+          --quoting "${TRIPLET_QUOTING}" \
+          --has-header "${TRIPLET_HAS_HEADER}" \
+          --bidirectional 1
+      else
+        echo "Skip wikipedia pair build for now: ${wiki_train_file} is not ready yet."
       fi
     fi
   fi
@@ -301,8 +378,23 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/contrastive/pairs_train.tsv"
       )
       ;;
+    wikipedia_triplet)
+      required_files=(
+        "datasets/wikipedia-sections-triplets/train.csv"
+        "datasets/wikipedia-sections-triplets/validation.csv"
+        "datasets/wikipedia-sections-triplets/test.csv"
+      )
+      ;;
+    wikipedia_triplet_mnrl)
+      required_files=(
+        "datasets/wikipedia-sections-triplets/train.csv"
+        "datasets/wikipedia-sections-triplets/validation.csv"
+        "datasets/wikipedia-sections-triplets/test.csv"
+        "datasets/contrastive/wikipedia_pairs_train.tsv"
+      )
+      ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, sts+nli (sts_nli), or sts+nli+mnrl (sts_nli_mnrl)." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, sts_nli, sts_nli_mnrl, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
       exit 1
       ;;
   esac
@@ -363,10 +455,18 @@ for file_path in "${required_files[@]}"; do
   fi
 done
 
-STS_TEST_PATH="${STS_PATH}/${STS_TEST_FILE}"
-if [ ! -f "${STS_TEST_PATH}" ]; then
-  echo "Missing required STS test file for evaluation: ${STS_TEST_PATH}" >&2
-  exit 1
+if [ "${EVAL_TASK}" = "sts" ]; then
+  STS_TEST_PATH="${STS_PATH}/${STS_TEST_FILE}"
+  if [ ! -f "${STS_TEST_PATH}" ]; then
+    echo "Missing required STS test file for evaluation: ${STS_TEST_PATH}" >&2
+    exit 1
+  fi
+else
+  TRIPLET_TEST_PATH="${TRIPLET_PATH}/${TRIPLET_TEST_FILE}"
+  if [ ! -f "${TRIPLET_TEST_PATH}" ]; then
+    echo "Missing required triplet test file for evaluation: ${TRIPLET_TEST_PATH}" >&2
+    exit 1
+  fi
 fi
 
 mkdir -p "${RESULT_DIR}"
@@ -375,6 +475,7 @@ mkdir -p "${RESULT_DIR}"
 echo "Result directory: ${RESULT_DIR}" | tee -a "${LOG_FILE}"
 echo "Model directory (overwritten each run): ${MODEL_DIR}" | tee -a "${LOG_FILE}"
 echo "Runs: ${NUM_RUNS}, seed_start=${SEED}, seed_step=${SEED_STEP}" | tee -a "${LOG_FILE}"
+echo "Evaluation task: ${EVAL_TASK}" | tee -a "${LOG_FILE}"
 
 for run_idx in $(seq 1 "${NUM_RUNS}"); do
   run_seed=$((SEED + (run_idx - 1) * SEED_STEP))
@@ -395,16 +496,35 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
   safe_cleanup_dir "${EVAL_TMP_DIR}"
   mkdir -p "${EVAL_TMP_DIR}"
 
-  python examples/evaluate_pretrained.py \
-    --model-name "${MODEL_DIR}" \
-    --sts-path "${STS_PATH}" \
-    --sts-test-file "${STS_TEST_FILE}" \
-    --batch-size "${BATCH_SIZE}" \
-    --seed "${run_seed}" \
-    --num-runs 1 \
-    --seed-step 1 \
-    --main-similarity "${MAIN_SIMILARITY}" \
-    --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  if [ "${EVAL_TASK}" = "sts" ]; then
+    python examples/evaluate_pretrained.py \
+      --model-name "${MODEL_DIR}" \
+      --sts-path "${STS_PATH}" \
+      --sts-test-file "${STS_TEST_FILE}" \
+      --batch-size "${BATCH_SIZE}" \
+      --seed "${run_seed}" \
+      --num-runs 1 \
+      --seed-step 1 \
+      --main-similarity "${MAIN_SIMILARITY}" \
+      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  else
+    python examples/evaluate_triplet_pretrained.py \
+      --model-name "${MODEL_DIR}" \
+      --triplet-path "${TRIPLET_PATH}" \
+      --triplet-test-file "${TRIPLET_TEST_FILE}" \
+      --batch-size "${BATCH_SIZE}" \
+      --seed "${run_seed}" \
+      --num-runs 1 \
+      --seed-step 1 \
+      --main-distance "${MAIN_DISTANCE}" \
+      --s1-col-idx "${TRIPLET_S1_COL_IDX}" \
+      --s2-col-idx "${TRIPLET_S2_COL_IDX}" \
+      --s3-col-idx "${TRIPLET_S3_COL_IDX}" \
+      --delimiter "${TRIPLET_DELIMITER}" \
+      --quoting "${TRIPLET_QUOTING}" \
+      --has-header "${TRIPLET_HAS_HEADER}" \
+      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  fi
 
   python - "${EVAL_TMP_DIR}/summary.json" "${run_idx}" >> "${RUNS_JSONL}" <<'PY'
 import json
@@ -427,7 +547,7 @@ print(json.dumps(row))
 PY
 done
 
-python - "${RUNS_JSONL}" "${SUMMARY_JSON}" "${SUMMARY_CSV}" "${MODEL_DIR}" "${NUM_RUNS}" "${SEED}" "${SEED_STEP}" "${MAIN_SIMILARITY}" "${STS_PATH}" "${STS_TEST_FILE}" <<'PY'
+python - "${RUNS_JSONL}" "${SUMMARY_JSON}" "${SUMMARY_CSV}" "${MODEL_DIR}" "${NUM_RUNS}" "${SEED}" "${SEED_STEP}" "${EVAL_TASK}" "${MAIN_SIMILARITY}" "${STS_PATH}" "${STS_TEST_FILE}" "${MAIN_DISTANCE}" "${TRIPLET_PATH}" "${TRIPLET_TEST_FILE}" <<'PY'
 import csv
 import json
 import statistics
@@ -440,9 +560,13 @@ model_dir = sys.argv[4]
 num_runs = int(sys.argv[5])
 seed_start = int(sys.argv[6])
 seed_step = int(sys.argv[7])
-main_similarity = sys.argv[8]
-sts_path = sys.argv[9]
-sts_test_file = sys.argv[10]
+eval_task = sys.argv[8]
+main_similarity = sys.argv[9]
+sts_path = sys.argv[10]
+sts_test_file = sys.argv[11]
+main_distance = sys.argv[12]
+triplet_path = sys.argv[13]
+triplet_test_file = sys.argv[14]
 
 runs = []
 with open(runs_jsonl, encoding="utf-8") as f_in:
@@ -468,9 +592,7 @@ for key in metric_keys:
 
 summary = {
     "model_name": model_dir,
-    "sts_path": sts_path,
-    "sts_test_file": sts_test_file,
-    "main_similarity": main_similarity,
+    "evaluation_task": eval_task,
     "num_runs": num_runs,
     "seed_start": seed_start,
     "seed_step": seed_step,
@@ -478,6 +600,15 @@ summary = {
     "aggregate": aggregate,
     "runs": runs,
 }
+
+if eval_task == "triplet":
+    summary["main_distance"] = main_distance
+    summary["triplet_path"] = triplet_path
+    summary["triplet_test_file"] = triplet_test_file
+else:
+    summary["main_similarity"] = main_similarity
+    summary["sts_path"] = sts_path
+    summary["sts_test_file"] = sts_test_file
 
 with open(summary_json, "w", encoding="utf-8") as f_out:
     json.dump(summary, f_out, indent=2)

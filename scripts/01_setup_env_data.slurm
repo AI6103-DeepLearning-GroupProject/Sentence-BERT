@@ -20,8 +20,8 @@
 #SBATCH --time=100
 #
 #SBATCH --job-name=sbert_setup
-#SBATCH --output=output/slurm/%x-%j.out
-#SBATCH --error=output/slurm/%x-%j.err
+#SBATCH --output=result/logs/%x-%j.out
+#SBATCH --error=result/logs/%x-%j.err
 
 set -euo pipefail
 
@@ -34,7 +34,7 @@ module purge
 module load "${PYTHON_MODULE}"
 
 cd "${PROJECT_DIR}"
-mkdir -p output/slurm datasets
+mkdir -p result/logs datasets
 
 sync_known_datasets() {
   local source_base src_dir dst_dir
