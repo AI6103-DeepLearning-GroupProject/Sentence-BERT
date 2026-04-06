@@ -9,6 +9,7 @@ import csv
 import logging
 import math
 import os
+import shutil
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -30,6 +31,8 @@ def _parse_args():
     parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, sts+nli")
     parser.add_argument("--epochs", type=int, default=None, help="Runtime epoch override for stages that do not set num_epochs explicitly")
     parser.add_argument("--output-path", type=str, default=None, help="Override output directory")
+    parser.add_argument("--resume-from", type=str, default=None, help="Load model from an existing path before training")
+    parser.add_argument("--start-stage", type=int, default=1, help="1-based runtime stage index to start from")
     return parser.parse_args()
 
 
@@ -372,12 +375,23 @@ def main():
         logging.info("Runtime mode enabled: model_variant=%s, data_mode=%s", runtime_plan["model_variant"], runtime_plan["data_mode"])
         logging.info("Output path: %s", output_path)
 
-        model = _build_model(runtime_plan["model"])
+        if args.resume_from:
+            model = SentenceTransformer(args.resume_from)
+            logging.info("Resuming model from: %s", args.resume_from)
+        else:
+            model = _build_model(runtime_plan["model"])
+
         final_test_evaluator = None
         final_save_best_model = True
 
         total_stages = len(runtime_plan["stages"])
-        for stage_idx, stage_cfg in enumerate(runtime_plan["stages"]):
+        if args.start_stage < 1 or args.start_stage > total_stages:
+            raise ValueError("--start-stage must be within [1, {}], got {}".format(total_stages, args.start_stage))
+        if args.start_stage > 1:
+            logging.info("Skip first %d stage(s), start from stage %d/%d", args.start_stage - 1, args.start_stage, total_stages)
+
+        for stage_idx in range(args.start_stage - 1, total_stages):
+            stage_cfg = runtime_plan["stages"][stage_idx]
             stage_name = stage_cfg["name"]
             is_last_stage = (stage_idx == total_stages - 1)
 
@@ -385,11 +399,24 @@ def main():
             train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
 
             stage_training_cfg = dict(stage_cfg["training"])
+            pending_swap = None
             if not is_last_stage:
                 stage_training_cfg["save_best_model"] = False
                 stage_output_path = None
             else:
                 stage_output_path = output_path
+                # fit() refuses non-empty output dirs. For resume-in-place, save to tmp then swap.
+                if (
+                    args.resume_from
+                    and os.path.abspath(args.resume_from) == os.path.abspath(output_path)
+                    and os.path.isdir(output_path)
+                    and os.listdir(output_path)
+                ):
+                    tmp_output_path = output_path + ".tmp_save"
+                    if os.path.isdir(tmp_output_path):
+                        shutil.rmtree(tmp_output_path)
+                    stage_output_path = tmp_output_path
+                    pending_swap = (tmp_output_path, output_path)
 
             fit_kwargs = _build_fit_kwargs(
                 train_dataloader=train_dataloader,
@@ -402,6 +429,12 @@ def main():
             )
             logging.info("Stage %s warmup steps: %s", stage_name, fit_kwargs["warmup_steps"])
             model.fit(**fit_kwargs)
+
+            if pending_swap is not None:
+                tmp_output_path, final_output_path = pending_swap
+                if os.path.isdir(final_output_path):
+                    shutil.rmtree(final_output_path)
+                shutil.move(tmp_output_path, final_output_path)
 
             final_test_evaluator = test_evaluator
             final_save_best_model = stage_training_cfg.get("save_best_model", True)

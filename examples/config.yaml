@@ -4,7 +4,7 @@ global:
   evaluate_on_test: false
   training:
     batch_size: 32
-    num_epochs: 4
+    num_epochs: 1
     warmup_ratio: 0.1
     evaluation_steps: 10000
     scheduler: WarmupLinear

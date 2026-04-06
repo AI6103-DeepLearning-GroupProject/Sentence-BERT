@@ -39,6 +39,8 @@ EPOCHS="${EPOCHS:-}"
 SEED="${SEED:-}"
 NUM_RUNS="${NUM_RUNS:-}"
 SEED_STEP="${SEED_STEP:-}"
+RESUME_STAGE="${RESUME_STAGE:-}"
+RESUME_FROM="${RESUME_FROM:-}"
 RESULT_DIR="${RESULT_DIR:-}"
 MODEL_DIR="${MODEL_DIR:-}"
 
@@ -122,6 +124,12 @@ fi
 if [ -z "${SEED_STEP}" ]; then
   SEED_STEP="$(read_root_cfg "slurm.train.seed_step" "1")"
 fi
+if [ -z "${RESUME_STAGE}" ]; then
+  RESUME_STAGE="$(read_root_cfg "slurm.train.resume_stage" "1")"
+fi
+if [ -z "${RESUME_FROM}" ]; then
+  RESUME_FROM="$(read_root_cfg "slurm.train.resume_from" "")"
+fi
 if [ -z "${RESULT_DIR}" ]; then
   RESULT_DIR="$(read_root_cfg "slurm.train.result_dir" "")"
 fi
@@ -184,6 +192,10 @@ if ! [[ "${NUM_RUNS}" =~ ^[0-9]+$ ]] || [ "${NUM_RUNS}" -lt 1 ]; then
 fi
 if ! [[ "${SEED_STEP}" =~ ^[0-9]+$ ]] || [ "${SEED_STEP}" -lt 1 ]; then
   echo "SEED_STEP must be an integer >= 1. Got: ${SEED_STEP}" >&2
+  exit 1
+fi
+if ! [[ "${RESUME_STAGE}" =~ ^[0-9]+$ ]] || [ "${RESUME_STAGE}" -lt 1 ]; then
+  echo "RESUME_STAGE must be an integer >= 1. Got: ${RESUME_STAGE}" >&2
   exit 1
 fi
 
@@ -475,23 +487,48 @@ mkdir -p "${RESULT_DIR}"
 echo "Result directory: ${RESULT_DIR}" | tee -a "${LOG_FILE}"
 echo "Model directory (overwritten each run): ${MODEL_DIR}" | tee -a "${LOG_FILE}"
 echo "Runs: ${NUM_RUNS}, seed_start=${SEED}, seed_step=${SEED_STEP}" | tee -a "${LOG_FILE}"
+echo "Resume stage: ${RESUME_STAGE}" | tee -a "${LOG_FILE}"
 echo "Evaluation task: ${EVAL_TASK}" | tee -a "${LOG_FILE}"
 
 for run_idx in $(seq 1 "${NUM_RUNS}"); do
   run_seed=$((SEED + (run_idx - 1) * SEED_STEP))
   echo "==== Run ${run_idx}/${NUM_RUNS} | seed=${run_seed} ====" | tee -a "${LOG_FILE}"
 
-  safe_cleanup_dir "${MODEL_DIR}"
-  mkdir -p "${MODEL_DIR}"
+  run_resume_stage=1
+  run_resume_from=""
 
-  python examples/train_with_config.py \
-    --config "${CONFIG_PATH}" \
-    --experiment "${EXPERIMENT}" \
-    --model-variant "${MODEL_VARIANT}" \
-    --data-mode "${DATA_MODE}" \
-    --epochs "${EPOCHS}" \
-    --seed "${run_seed}" \
-    --output-path "${MODEL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  if [ "${run_idx}" -eq 1 ] && [ "${RESUME_STAGE}" -gt 1 ]; then
+    run_resume_stage="${RESUME_STAGE}"
+    if [ -n "${RESUME_FROM}" ]; then
+      run_resume_from="${RESUME_FROM}"
+    else
+      run_resume_from="${MODEL_DIR}"
+    fi
+
+    if [ ! -d "${run_resume_from}" ] || [ -z "$(ls -A "${run_resume_from}" 2>/dev/null)" ]; then
+      echo "Resume requested but model directory is missing/empty: ${run_resume_from}" >&2
+      exit 1
+    fi
+    echo "Resume enabled for run 1: start_stage=${run_resume_stage}, resume_from=${run_resume_from}" | tee -a "${LOG_FILE}"
+  else
+    safe_cleanup_dir "${MODEL_DIR}"
+    mkdir -p "${MODEL_DIR}"
+  fi
+
+  train_cmd=(
+    python examples/train_with_config.py
+    --config "${CONFIG_PATH}"
+    --experiment "${EXPERIMENT}"
+    --model-variant "${MODEL_VARIANT}"
+    --data-mode "${DATA_MODE}"
+    --epochs "${EPOCHS}"
+    --seed "${run_seed}"
+    --output-path "${MODEL_DIR}"
+  )
+  if [ "${run_resume_stage}" -gt 1 ]; then
+    train_cmd+=(--resume-from "${run_resume_from}" --start-stage "${run_resume_stage}")
+  fi
+  "${train_cmd[@]}" 2>&1 | tee -a "${LOG_FILE}"
 
   safe_cleanup_dir "${EVAL_TMP_DIR}"
   mkdir -p "${EVAL_TMP_DIR}"
