@@ -316,7 +316,7 @@ build_contrastive_pairs_if_needed() {
           --delimiter "${TRIPLET_DELIMITER}" \
           --quoting "${TRIPLET_QUOTING}" \
           --has-header "${TRIPLET_HAS_HEADER}" \
-          --bidirectional 1
+          --bidirectional 0
       else
         echo "Skip wikipedia pair build for now: ${wiki_train_file} is not ready yet."
       fi

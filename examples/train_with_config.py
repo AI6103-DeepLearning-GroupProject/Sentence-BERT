@@ -183,8 +183,11 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     text1_col_idx = data_cfg.get("text1_col_idx", 0)
     text2_col_idx = data_cfg.get("text2_col_idx", 1)
     max_examples = data_cfg.get("max_examples", 0)
+    drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", True)
 
     examples = []
+    seen_pair_keys = set()
+    skipped_duplicate_pairs = 0
     with open(pairs_path, encoding="utf-8", newline="") as f_in:
         reader = csv.reader(f_in, delimiter=delimiter, quoting=quoting)
         if has_header:
@@ -200,6 +203,16 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
             if not text1 or not text2:
                 continue
 
+            if drop_mirror_pairs:
+                pair_key = (text1, text2) if text1 <= text2 else (text2, text1)
+            else:
+                pair_key = (text1, text2)
+
+            if pair_key in seen_pair_keys:
+                skipped_duplicate_pairs += 1
+                continue
+            seen_pair_keys.add(pair_key)
+
             guid = "{}-{}".format(os.path.basename(pairs_path), row_idx)
             examples.append(InputExample(guid=guid, texts=[text1, text2], label=1.0))
 
@@ -208,6 +221,13 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
 
     if not examples:
         raise ValueError("No valid sentence pairs found in {}".format(pairs_path))
+
+    if skipped_duplicate_pairs > 0:
+        logging.info(
+            "Filtered %d duplicate/mirrored pair rows while loading %s",
+            skipped_duplicate_pairs,
+            pairs_path,
+        )
 
     return examples
 

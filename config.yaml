@@ -8,7 +8,7 @@ slurm:
     seed: 42  # Training random seed (passed to train_with_config.py --seed).
     num_runs: 1  # Number of train+eval cycles in scripts/02_train_sbert.slurm (different seeds across runs).
     seed_step: 1  # Seed increment between training runs; run_i seed = seed + (i-1)*seed_step.
-    resume_stage: 1  # 1-based runtime stage index to start from in the first run; use >1 to skip earlier stages.
+    resume_stage: 2  # 1-based runtime stage index to start from in the first run; use >1 to skip earlier stages.
     resume_from: "result/runtime_sbert_base_wikipedia_triplet_mnrl/model"  # Optional model path to load when resume_stage > 1; empty means using result_dir/model.
     result_dir: "result/runtime_sbert_base_wikipedia_triplet_mnrl/"  # Optional fixed result folder for combined train+eval artifacts; empty means auto path under result/.
     data_auto_download: 1  # Options: 0/1; 1 means auto-run examples/datasets/get_data.py when required files are missing.
