@@ -28,7 +28,7 @@ def _parse_args():
     parser.add_argument("--experiment", type=str, required=True, help="Experiment name inside config.experiments")
     parser.add_argument("--seed", type=int, default=None, help="Override seed from config")
     parser.add_argument("--model-variant", type=str, default=None, help="Runtime model variant key from config.runtime.model_variants")
-    parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, sts+nli")
+    parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, nli+mnrl, sts+nli")
     parser.add_argument("--epochs", type=int, default=None, help="Runtime epoch override for stages that do not set num_epochs explicitly")
     parser.add_argument("--output-path", type=str, default=None, help="Override output directory")
     parser.add_argument("--resume-from", type=str, default=None, help="Load model from an existing path before training")
