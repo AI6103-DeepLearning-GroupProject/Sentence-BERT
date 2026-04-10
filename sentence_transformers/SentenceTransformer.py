@@ -378,6 +378,12 @@ class SentenceTransformer(nn.Sequential):
 
             self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1)
 
+        # Ensure we always persist a trained model when an output path is provided.
+        # Without an evaluator, _eval_during_training never calls save(), which leaves
+        # output_path without modules.json and breaks downstream loading.
+        if output_path is not None and (evaluator is None or not save_best_model):
+            self.save(output_path)
+
     def evaluate(self, evaluator: SentenceEvaluator, output_path: str = None):
         """
         Evaluate the model
