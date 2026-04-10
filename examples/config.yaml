@@ -202,25 +202,17 @@ experiments:
               data:
                 nli_path: datasets/AllNLI
                 nli_train_file: train.gz
-                sts_path: datasets/stsbenchmark
-                sts_dev_file: sts-dev.csv
-                sts_test_file: sts-test.csv
-                normalize_scores: true
               training:
                 num_epochs: 1
             - name: mnrl
               task:
                 type: mnrl_contrastive
               data:
-                pairs_path: datasets/contrastive/pairs_train.tsv
+                pairs_path: datasets/contrastive/nli_pairs_train.tsv
                 delimiter: "\t"
                 has_header: false
                 text1_col_idx: 0
                 text2_col_idx: 1
-                sts_path: datasets/stsbenchmark
-                sts_dev_file: sts-dev.csv
-                sts_test_file: sts-test.csv
-                normalize_scores: true
               training:
                 num_epochs: 2
                 batch_size: 32

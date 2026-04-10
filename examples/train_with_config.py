@@ -242,10 +242,6 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
     if task_type == "nli_softmax":
         nli_reader = NLIDataReader(data_cfg["nli_path"])
-        sts_reader = STSDataReader(
-            data_cfg["sts_path"],
-            normalize_scores=data_cfg.get("normalize_scores", True),
-        )
 
         train_data = SentencesDataset(nli_reader.get_examples(data_cfg.get("nli_train_file", "train.gz")), model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
@@ -255,13 +251,22 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             num_labels=nli_reader.get_num_labels(),
         )
 
-        dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
-        dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-        evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+        evaluator = None
+        test_evaluator = None
+        sts_path = data_cfg.get("sts_path")
+        if sts_path:
+            sts_reader = STSDataReader(
+                sts_path,
+                normalize_scores=data_cfg.get("normalize_scores", True),
+            )
 
-        test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
-        test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-        test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+            dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+            test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+            test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
         return train_dataloader, train_loss, evaluator, test_evaluator
 
     if task_type == "sts_cosine":

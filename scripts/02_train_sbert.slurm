@@ -196,7 +196,7 @@ if [ -z "${SENTEVAL_TASKS}" ]; then
   SENTEVAL_TASKS="$(read_root_cfg "slurm.eval.senteval_tasks" "MR,CR,SUBJ,MPQA,SST2,TREC,MRPC")"
 fi
 if [ -z "${SENTEVAL_KFOLD}" ]; then
-  SENTEVAL_KFOLD="$(read_root_cfg "slurm.eval.senteval_kfold" "1")"
+  SENTEVAL_KFOLD="$(read_root_cfg "slurm.eval.senteval_kfold" "2")"
 fi
 if [ -z "${SENTEVAL_MAIN_METRIC}" ]; then
   SENTEVAL_MAIN_METRIC="$(read_root_cfg "slurm.eval.senteval_main_metric" "auto")"
@@ -344,7 +344,7 @@ normalize_flat_datasets() {
 }
 
 build_contrastive_pairs_if_needed() {
-  if [ "${EXPERIMENT}" = "runtime" ] && { [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ] || [ "${DATA_MODE_NORM}" = "nli_mnrl" ]; }; then
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ]; then
     local sts_pairs_file="datasets/contrastive/pairs_train.tsv"
     if [ ! -f "${sts_pairs_file}" ]; then
       if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
@@ -355,6 +355,21 @@ build_contrastive_pairs_if_needed() {
           --output-path "${sts_pairs_file}"
       else
         echo "Skip STS/NLI pair build for now: source files are not ready yet."
+      fi
+    fi
+  fi
+
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "nli_mnrl" ]; then
+    local nli_pairs_file="datasets/contrastive/nli_pairs_train.tsv"
+    if [ ! -f "${nli_pairs_file}" ]; then
+      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ]; then
+        echo "Building NLI-only contrastive pairs for MNRL..."
+        python examples/datasets/build_contrastive_pairs.py \
+          --allnli-path datasets/AllNLI \
+          --output-path "${nli_pairs_file}" \
+          --disable-sts
+      else
+        echo "Skip NLI-only pair build for now: AllNLI source files are not ready yet."
       fi
     fi
   fi
@@ -452,10 +467,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/AllNLI/s1.train.gz"
         "datasets/AllNLI/s2.train.gz"
         "datasets/AllNLI/labels.train.gz"
-        "datasets/stsbenchmark/sts-train.csv"
-        "datasets/stsbenchmark/sts-dev.csv"
-        "datasets/stsbenchmark/sts-test.csv"
-        "datasets/contrastive/pairs_train.tsv"
+        "datasets/contrastive/nli_pairs_train.tsv"
       )
       ;;
     wikipedia_triplet)

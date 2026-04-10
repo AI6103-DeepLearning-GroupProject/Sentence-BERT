@@ -33,9 +33,9 @@ slurm:
     main_similarity: cosine  # Options: cosine | euclidean | manhattan | dot | max (max lets evaluator choose the best metric).
     main_distance: cosine  # Triplet main score distance: cosine | euclidean | manhattan | max.
     senteval_toolkit_path: datasets/SentEval  # SentEval toolkit root (should contain senteval/ package).
-    senteval_data_path: datasets/SentEval/data  # SentEval data root.
+    senteval_data_path: datasets/SentEval/data  # SentEval transfer-task data root.
     senteval_tasks: MR,CR,SUBJ,MPQA,SST2,TREC,MRPC  # Comma-separated SentEval tasks.
-    senteval_kfold: 1  # SentEval kfold; set 10 to reproduce classic SentEval CV behavior.
+    senteval_kfold: 2  # SentEval kfold; must be >=2 for CV tasks. set 10 to reproduce classic behavior.
     senteval_main_metric: auto  # Metric key in evaluate_senteval.py summary, or auto to average primary task metrics.
     senteval_classifier_nhid: 0  # SentEval classifier hidden units.
     senteval_classifier_optim: rmsprop  # SentEval classifier optimizer.

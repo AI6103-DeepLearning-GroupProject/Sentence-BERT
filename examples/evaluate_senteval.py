@@ -12,6 +12,8 @@ import logging
 import os
 import statistics
 import sys
+import inspect
+import collections
 from datetime import datetime
 from typing import Dict, List, Tuple
 
@@ -19,6 +21,23 @@ import numpy as np
 
 from sentence_transformers import LoggingHandler, SentenceTransformer
 from sentence_transformers.util import set_seed
+
+
+def _ensure_inspect_getargspec_compat() -> None:
+    """
+    SentEval calls inspect.getargspec(), removed in Python 3.11+.
+    Provide a backward-compatible shim.
+    """
+    if hasattr(inspect, "getargspec"):
+        return
+
+    ArgSpec = collections.namedtuple("ArgSpec", ["args", "varargs", "keywords", "defaults"])
+
+    def _compat_getargspec(func):
+        full = inspect.getfullargspec(func)
+        return ArgSpec(full.args, full.varargs, full.varkw, full.defaults)
+
+    inspect.getargspec = _compat_getargspec  # type: ignore[attr-defined]
 
 
 def parse_args():
@@ -33,7 +52,7 @@ def parse_args():
         help="Comma separated SentEval tasks",
     )
     parser.add_argument("--batch-size", type=int, default=64, help="SentenceTransformer encode batch size")
-    parser.add_argument("--kfold", type=int, default=1, help="SentEval kfold setting (default: no 10-fold)")
+    parser.add_argument("--kfold", type=int, default=2, help="SentEval kfold setting (must be >=2 for CV tasks)")
     parser.add_argument("--main-metric", type=str, default="auto", help="Metric key used as score, or auto")
     parser.add_argument("--classifier-nhid", type=int, default=0)
     parser.add_argument("--classifier-optim", type=str, default="rmsprop")
@@ -89,6 +108,9 @@ def _load_senteval_engine(toolkit_path: str):
     if not os.path.isdir(toolkit_path):
         raise ValueError("SentEval toolkit path not found: {}".format(toolkit_path))
 
+    # Patch before import.
+    _ensure_inspect_getargspec_compat()
+
     sys.path.insert(0, toolkit_path)
     try:
         import senteval  # type: ignore
@@ -96,6 +118,17 @@ def _load_senteval_engine(toolkit_path: str):
         raise ImportError(
             "Failed to import senteval from {}. Ensure toolkit is available.".format(toolkit_path)
         ) from exc
+
+    # Patch again after import in case SentEval internal modules cached inspect early.
+    _ensure_inspect_getargspec_compat()
+    try:
+        import senteval.utils as senteval_utils  # type: ignore
+        if hasattr(senteval_utils, "inspect") and not hasattr(senteval_utils.inspect, "getargspec"):
+            senteval_utils.inspect.getargspec = inspect.getargspec  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    logging.info("SentEval inspect compatibility patch active: getargspec=%s", hasattr(inspect, "getargspec"))
     return senteval
 
 
@@ -125,10 +158,14 @@ def _evaluate_once(args, run_seed: int):
         )
         return np.asarray(embeddings)
 
+    effective_kfold = max(2, int(args.kfold))
+    if effective_kfold != args.kfold:
+        logging.warning("SentEval kfold=%d is invalid for CV tasks; using kfold=%d", args.kfold, effective_kfold)
+
     params_senteval = {
         "task_path": args.senteval_data_path,
         "usepytorch": True,
-        "kfold": args.kfold,
+        "kfold": effective_kfold,
         "classifier": {
             "nhid": args.classifier_nhid,
             "optim": args.classifier_optim,
@@ -179,7 +216,7 @@ def _evaluate_once(args, run_seed: int):
         score = float(statistics.mean(metrics.values()))
         main_metric_used = "mean(all_metrics)"
 
-    return score, metrics, main_metric_used, tasks
+    return score, metrics, main_metric_used, tasks, effective_kfold
 
 
 def main():
@@ -210,9 +247,10 @@ def main():
     run_results = []
     main_metric_used = "auto"
     tasks = []
+    effective_kfold = args.kfold
 
     for run_idx, run_seed in enumerate(seeds, start=1):
-        score, metrics, main_metric_used, tasks = _evaluate_once(args, run_seed=run_seed)
+        score, metrics, main_metric_used, tasks, effective_kfold = _evaluate_once(args, run_seed=run_seed)
         run_results.append(
             {
                 "run_index": run_idx,
@@ -246,7 +284,7 @@ def main():
         "senteval_toolkit_path": args.senteval_toolkit_path,
         "senteval_data_path": args.senteval_data_path,
         "senteval_tasks": tasks,
-        "senteval_kfold": args.kfold,
+        "senteval_kfold": effective_kfold,
         "classifier": {
             "nhid": args.classifier_nhid,
             "optim": args.classifier_optim,
