@@ -446,3 +446,41 @@ Don't hesitate to send us an e-mail or report an issue, if something is broken (
 
 
 
+
+## AI6103 Experiment Update (2026-04-11)
+
+This section summarizes the three completed experiments in this repository.
+
+### 1) Direction-1: Attention Pooling (STS supervised)
+- Script: `examples/training_stsbenchmark_bert.py --pooling attention`
+- Model output: `output/training_stsbenchmark_bert-attention-seed42-2026-04-11_08-00-49`
+- Metric file: `output/training_stsbenchmark_bert-attention-seed42-2026-04-11_08-00-49/similarity_evaluation_results.csv`
+
+Best STS cosine Spearman (dev, from recorded evaluations): **0.8750**.
+
+### 2) Direction-2: SimCSE-style contrastive (unsupervised)
+- Script: `examples/training_simcse_unsupervised.py`
+- Setting: `pair_mode=dropout_and_aug`, `augmentation=random_delete_swap`
+- Model output: `output/training_simcse_unsup-dropout_and_aug-random_delete_swap-seed42-2026-04-11_08-26-03`
+- Metric file: `output/training_simcse_unsup-dropout_and_aug-random_delete_swap-seed42-2026-04-11_08-26-03/similarity_evaluation_results.csv`
+
+Recorded STS cosine Spearman (dev): **0.7966**.
+
+### 3) Direction-3: Task-aware Prompt (STS + NLI + unsupervised)
+- Script: `examples/training_task_aware_prompt.py --use_prompt --tasks sts,nli,unsup`
+- Model output: `output/training_task_aware_prompt-prompt-nli-sts-unsup-seed42-2026-04-11_08-26-58`
+- Metric files:
+  - `output/training_task_aware_prompt-prompt-nli-sts-unsup-seed42-2026-04-11_08-26-58/similarity_evaluation_sts_dev_results.csv`
+  - `output/training_task_aware_prompt-prompt-nli-sts-unsup-seed42-2026-04-11_08-26-58/similarity_evaluation_sts_test_results.csv`
+  - `output/training_task_aware_prompt-prompt-nli-sts-unsup-seed42-2026-04-11_08-26-58/accuracy_evaluation_nli_dev_results.csv`
+
+Key results:
+- STS cosine Spearman (best dev): **0.8609**
+- STS cosine Spearman (test): **0.8297**
+- NLI dev accuracy (best): **0.6334**
+
+### Overall Summary
+- Attention Pooling achieved the highest STS dev score in this run (**0.8750**), showing strong effectiveness for pure STS optimization.
+- SimCSE unsupervised training gives a usable semantic baseline (**0.7966** dev) without labeled STS pairs, but is below supervised alternatives.
+- Task-aware prompt training provides balanced multi-task behavior: competitive STS (**0.8297** test) while also improving NLI capability (**0.6334** dev accuracy), making it the most task-general option among the three.
+
