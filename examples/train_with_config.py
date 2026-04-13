@@ -109,14 +109,20 @@ def _resolve_runtime_plan(config: dict, args) -> Optional[dict]:
         raise ValueError("Runtime data_mode '{}' has no stages configured".format(data_mode_key))
 
     base_training_cfg = dict(config.get("training", {}))
+    # In runtime mode, stage epoch control should come from:
+    # 1) stage.training.num_epochs (highest priority)
+    # 2) runtime.epochs / --epochs
+    # Global training.num_epochs should not silently override runtime.epochs.
+    base_training_cfg.pop("num_epochs", None)
     stages = []
     for stage_idx, stage_cfg in enumerate(stages_cfg):
         if "task" not in stage_cfg or "data" not in stage_cfg:
             raise ValueError("runtime.data_modes.{}.stages[{}] must define task and data".format(data_mode_key, stage_idx))
 
+        stage_local_training_cfg = stage_cfg.get("training", {})
         stage_training_cfg = dict(base_training_cfg)
-        stage_training_cfg.update(stage_cfg.get("training", {}))
-        if "num_epochs" not in stage_training_cfg:
+        stage_training_cfg.update(stage_local_training_cfg)
+        if "num_epochs" not in stage_local_training_cfg:
             stage_training_cfg["num_epochs"] = epochs
 
         stage_name = stage_cfg.get("name", "stage{}".format(stage_idx + 1))

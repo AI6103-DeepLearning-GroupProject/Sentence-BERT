@@ -119,7 +119,7 @@ experiments:
   runtime:
     runtime:
       model_variant: sbert_base
-      data_mode: sts
+      data_mode: sts_nli
       epochs: 4
       model_variants:
         sbert_base:
@@ -241,6 +241,8 @@ experiments:
                 sts_dev_file: sts-dev.csv
                 sts_test_file: sts-test.csv
                 normalize_scores: true
+              training:
+                num_epochs: 4
 
         sts_nli_mnrl:
           stages:
