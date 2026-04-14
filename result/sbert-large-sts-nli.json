@@ -1,0 +1,13 @@
+{
+    "score": 0.8549430649309168,
+    "metrics": {
+        "cosine_pearson": 0.8495913,
+        "cosine_spearman": 0.8549430649309168,
+        "euclidean_pearson": 0.8506229,
+        "euclidean_spearman": 0.8565783790450041,
+        "manhattan_pearson": 0.849939,
+        "manhattan_spearman": 0.8560881042523114,
+        "dot_pearson": 0.83758974,
+        "dot_spearman": 0.8403291776293691
+    }
+}
