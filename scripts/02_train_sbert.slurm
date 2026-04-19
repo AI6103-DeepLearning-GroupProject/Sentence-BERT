@@ -39,6 +39,8 @@ EPOCHS="${EPOCHS:-}"
 SEED="${SEED:-}"
 NUM_RUNS="${NUM_RUNS:-}"
 SEED_STEP="${SEED_STEP:-}"
+RESUME_STAGE="${RESUME_STAGE:-}"
+RESUME_FROM="${RESUME_FROM:-}"
 RESULT_DIR="${RESULT_DIR:-}"
 MODEL_DIR="${MODEL_DIR:-}"
 
@@ -59,6 +61,17 @@ TRIPLET_S3_COL_IDX="${TRIPLET_S3_COL_IDX:-}"
 TRIPLET_DELIMITER="${TRIPLET_DELIMITER:-}"
 TRIPLET_QUOTING="${TRIPLET_QUOTING:-}"
 TRIPLET_HAS_HEADER="${TRIPLET_HAS_HEADER:-}"
+
+SENTEVAL_TOOLKIT_PATH="${SENTEVAL_TOOLKIT_PATH:-}"
+SENTEVAL_DATA_PATH="${SENTEVAL_DATA_PATH:-}"
+SENTEVAL_TASKS="${SENTEVAL_TASKS:-}"
+SENTEVAL_KFOLD="${SENTEVAL_KFOLD:-}"
+SENTEVAL_MAIN_METRIC="${SENTEVAL_MAIN_METRIC:-}"
+SENTEVAL_CLASSIFIER_NHID="${SENTEVAL_CLASSIFIER_NHID:-}"
+SENTEVAL_CLASSIFIER_OPTIM="${SENTEVAL_CLASSIFIER_OPTIM:-}"
+SENTEVAL_CLASSIFIER_BATCH_SIZE="${SENTEVAL_CLASSIFIER_BATCH_SIZE:-}"
+SENTEVAL_CLASSIFIER_TENACITY="${SENTEVAL_CLASSIFIER_TENACITY:-}"
+SENTEVAL_CLASSIFIER_EPOCH_SIZE="${SENTEVAL_CLASSIFIER_EPOCH_SIZE:-}"
 
 module purge
 module load "${PYTHON_MODULE}"
@@ -122,6 +135,12 @@ fi
 if [ -z "${SEED_STEP}" ]; then
   SEED_STEP="$(read_root_cfg "slurm.train.seed_step" "1")"
 fi
+if [ -z "${RESUME_STAGE}" ]; then
+  RESUME_STAGE="$(read_root_cfg "slurm.train.resume_stage" "1")"
+fi
+if [ -z "${RESUME_FROM}" ]; then
+  RESUME_FROM="$(read_root_cfg "slurm.train.resume_from" "")"
+fi
 if [ -z "${RESULT_DIR}" ]; then
   RESULT_DIR="$(read_root_cfg "slurm.train.result_dir" "")"
 fi
@@ -167,6 +186,36 @@ fi
 if [ -z "${TRIPLET_HAS_HEADER}" ]; then
   TRIPLET_HAS_HEADER="$(read_root_cfg "slurm.eval.triplet_has_header" "1")"
 fi
+if [ -z "${SENTEVAL_TOOLKIT_PATH}" ]; then
+  SENTEVAL_TOOLKIT_PATH="$(read_root_cfg "slurm.eval.senteval_toolkit_path" "datasets/SentEval")"
+fi
+if [ -z "${SENTEVAL_DATA_PATH}" ]; then
+  SENTEVAL_DATA_PATH="$(read_root_cfg "slurm.eval.senteval_data_path" "datasets/SentEval/data")"
+fi
+if [ -z "${SENTEVAL_TASKS}" ]; then
+  SENTEVAL_TASKS="$(read_root_cfg "slurm.eval.senteval_tasks" "MR,CR,SUBJ,MPQA,SST2,TREC,MRPC")"
+fi
+if [ -z "${SENTEVAL_KFOLD}" ]; then
+  SENTEVAL_KFOLD="$(read_root_cfg "slurm.eval.senteval_kfold" "2")"
+fi
+if [ -z "${SENTEVAL_MAIN_METRIC}" ]; then
+  SENTEVAL_MAIN_METRIC="$(read_root_cfg "slurm.eval.senteval_main_metric" "auto")"
+fi
+if [ -z "${SENTEVAL_CLASSIFIER_NHID}" ]; then
+  SENTEVAL_CLASSIFIER_NHID="$(read_root_cfg "slurm.eval.senteval_classifier_nhid" "0")"
+fi
+if [ -z "${SENTEVAL_CLASSIFIER_OPTIM}" ]; then
+  SENTEVAL_CLASSIFIER_OPTIM="$(read_root_cfg "slurm.eval.senteval_classifier_optim" "rmsprop")"
+fi
+if [ -z "${SENTEVAL_CLASSIFIER_BATCH_SIZE}" ]; then
+  SENTEVAL_CLASSIFIER_BATCH_SIZE="$(read_root_cfg "slurm.eval.senteval_classifier_batch_size" "128")"
+fi
+if [ -z "${SENTEVAL_CLASSIFIER_TENACITY}" ]; then
+  SENTEVAL_CLASSIFIER_TENACITY="$(read_root_cfg "slurm.eval.senteval_classifier_tenacity" "3")"
+fi
+if [ -z "${SENTEVAL_CLASSIFIER_EPOCH_SIZE}" ]; then
+  SENTEVAL_CLASSIFIER_EPOCH_SIZE="$(read_root_cfg "slurm.eval.senteval_classifier_epoch_size" "2")"
+fi
 if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
   DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.train.data_auto_download" "")"
   if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
@@ -186,6 +235,26 @@ if ! [[ "${SEED_STEP}" =~ ^[0-9]+$ ]] || [ "${SEED_STEP}" -lt 1 ]; then
   echo "SEED_STEP must be an integer >= 1. Got: ${SEED_STEP}" >&2
   exit 1
 fi
+if ! [[ "${RESUME_STAGE}" =~ ^[0-9]+$ ]] || [ "${RESUME_STAGE}" -lt 1 ]; then
+  echo "RESUME_STAGE must be an integer >= 1. Got: ${RESUME_STAGE}" >&2
+  exit 1
+fi
+if ! [[ "${SENTEVAL_KFOLD}" =~ ^[0-9]+$ ]] || [ "${SENTEVAL_KFOLD}" -lt 1 ]; then
+  echo "SENTEVAL_KFOLD must be an integer >= 1. Got: ${SENTEVAL_KFOLD}" >&2
+  exit 1
+fi
+if ! [[ "${SENTEVAL_CLASSIFIER_BATCH_SIZE}" =~ ^[0-9]+$ ]] || [ "${SENTEVAL_CLASSIFIER_BATCH_SIZE}" -lt 1 ]; then
+  echo "SENTEVAL_CLASSIFIER_BATCH_SIZE must be an integer >= 1. Got: ${SENTEVAL_CLASSIFIER_BATCH_SIZE}" >&2
+  exit 1
+fi
+if ! [[ "${SENTEVAL_CLASSIFIER_TENACITY}" =~ ^[0-9]+$ ]] || [ "${SENTEVAL_CLASSIFIER_TENACITY}" -lt 1 ]; then
+  echo "SENTEVAL_CLASSIFIER_TENACITY must be an integer >= 1. Got: ${SENTEVAL_CLASSIFIER_TENACITY}" >&2
+  exit 1
+fi
+if ! [[ "${SENTEVAL_CLASSIFIER_EPOCH_SIZE}" =~ ^[0-9]+$ ]] || [ "${SENTEVAL_CLASSIFIER_EPOCH_SIZE}" -lt 1 ]; then
+  echo "SENTEVAL_CLASSIFIER_EPOCH_SIZE must be an integer >= 1. Got: ${SENTEVAL_CLASSIFIER_EPOCH_SIZE}" >&2
+  exit 1
+fi
 
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
@@ -201,8 +270,8 @@ if [ "${EVAL_TASK}" = "auto" ]; then
   fi
 fi
 
-if [ "${EVAL_TASK}" != "sts" ] && [ "${EVAL_TASK}" != "triplet" ]; then
-  echo "EVAL_TASK must be one of: sts, triplet, auto. Got: ${EVAL_TASK}" >&2
+if [ "${EVAL_TASK}" != "sts" ] && [ "${EVAL_TASK}" != "triplet" ] && [ "${EVAL_TASK}" != "senteval" ]; then
+  echo "EVAL_TASK must be one of: sts, triplet, senteval, auto. Got: ${EVAL_TASK}" >&2
   exit 1
 fi
 
@@ -290,6 +359,21 @@ build_contrastive_pairs_if_needed() {
     fi
   fi
 
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "nli_mnrl" ]; then
+    local nli_pairs_file="datasets/contrastive/nli_pairs_train.tsv"
+    if [ ! -f "${nli_pairs_file}" ]; then
+      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ]; then
+        echo "Building NLI-only contrastive pairs for MNRL..."
+        python examples/datasets/build_contrastive_pairs.py \
+          --allnli-path datasets/AllNLI \
+          --output-path "${nli_pairs_file}" \
+          --disable-sts
+      else
+        echo "Skip NLI-only pair build for now: AllNLI source files are not ready yet."
+      fi
+    fi
+  fi
+
   if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "wikipedia_triplet_mnrl" ]; then
     local wiki_pairs_file="datasets/contrastive/wikipedia_pairs_train.tsv"
     local wiki_train_file="datasets/wikipedia-sections-triplets/train.csv"
@@ -304,7 +388,7 @@ build_contrastive_pairs_if_needed() {
           --delimiter "${TRIPLET_DELIMITER}" \
           --quoting "${TRIPLET_QUOTING}" \
           --has-header "${TRIPLET_HAS_HEADER}" \
-          --bidirectional 1
+          --bidirectional 0
       else
         echo "Skip wikipedia pair build for now: ${wiki_train_file} is not ready yet."
       fi
@@ -378,6 +462,14 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/contrastive/pairs_train.tsv"
       )
       ;;
+    nli_mnrl)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/contrastive/nli_pairs_train.tsv"
+      )
+      ;;
     wikipedia_triplet)
       required_files=(
         "datasets/wikipedia-sections-triplets/train.csv"
@@ -394,7 +486,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
       )
       ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, sts_nli, sts_nli_mnrl, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
       exit 1
       ;;
   esac
@@ -461,10 +553,19 @@ if [ "${EVAL_TASK}" = "sts" ]; then
     echo "Missing required STS test file for evaluation: ${STS_TEST_PATH}" >&2
     exit 1
   fi
-else
+elif [ "${EVAL_TASK}" = "triplet" ]; then
   TRIPLET_TEST_PATH="${TRIPLET_PATH}/${TRIPLET_TEST_FILE}"
   if [ ! -f "${TRIPLET_TEST_PATH}" ]; then
     echo "Missing required triplet test file for evaluation: ${TRIPLET_TEST_PATH}" >&2
+    exit 1
+  fi
+else
+  if [ ! -d "${SENTEVAL_TOOLKIT_PATH}" ]; then
+    echo "Missing SentEval toolkit directory: ${SENTEVAL_TOOLKIT_PATH}" >&2
+    exit 1
+  fi
+  if [ ! -d "${SENTEVAL_DATA_PATH}" ]; then
+    echo "Missing SentEval data directory: ${SENTEVAL_DATA_PATH}" >&2
     exit 1
   fi
 fi
@@ -475,23 +576,48 @@ mkdir -p "${RESULT_DIR}"
 echo "Result directory: ${RESULT_DIR}" | tee -a "${LOG_FILE}"
 echo "Model directory (overwritten each run): ${MODEL_DIR}" | tee -a "${LOG_FILE}"
 echo "Runs: ${NUM_RUNS}, seed_start=${SEED}, seed_step=${SEED_STEP}" | tee -a "${LOG_FILE}"
+echo "Resume stage: ${RESUME_STAGE}" | tee -a "${LOG_FILE}"
 echo "Evaluation task: ${EVAL_TASK}" | tee -a "${LOG_FILE}"
 
 for run_idx in $(seq 1 "${NUM_RUNS}"); do
   run_seed=$((SEED + (run_idx - 1) * SEED_STEP))
   echo "==== Run ${run_idx}/${NUM_RUNS} | seed=${run_seed} ====" | tee -a "${LOG_FILE}"
 
-  safe_cleanup_dir "${MODEL_DIR}"
-  mkdir -p "${MODEL_DIR}"
+  run_resume_stage=1
+  run_resume_from=""
 
-  python examples/train_with_config.py \
-    --config "${CONFIG_PATH}" \
-    --experiment "${EXPERIMENT}" \
-    --model-variant "${MODEL_VARIANT}" \
-    --data-mode "${DATA_MODE}" \
-    --epochs "${EPOCHS}" \
-    --seed "${run_seed}" \
-    --output-path "${MODEL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  if [ "${run_idx}" -eq 1 ] && [ "${RESUME_STAGE}" -gt 1 ]; then
+    run_resume_stage="${RESUME_STAGE}"
+    if [ -n "${RESUME_FROM}" ]; then
+      run_resume_from="${RESUME_FROM}"
+    else
+      run_resume_from="${MODEL_DIR}"
+    fi
+
+    if [ ! -d "${run_resume_from}" ] || [ -z "$(ls -A "${run_resume_from}" 2>/dev/null)" ]; then
+      echo "Resume requested but model directory is missing/empty: ${run_resume_from}" >&2
+      exit 1
+    fi
+    echo "Resume enabled for run 1: start_stage=${run_resume_stage}, resume_from=${run_resume_from}" | tee -a "${LOG_FILE}"
+  else
+    safe_cleanup_dir "${MODEL_DIR}"
+    mkdir -p "${MODEL_DIR}"
+  fi
+
+  train_cmd=(
+    python examples/train_with_config.py
+    --config "${CONFIG_PATH}"
+    --experiment "${EXPERIMENT}"
+    --model-variant "${MODEL_VARIANT}"
+    --data-mode "${DATA_MODE}"
+    --epochs "${EPOCHS}"
+    --seed "${run_seed}"
+    --output-path "${MODEL_DIR}"
+  )
+  if [ "${run_resume_stage}" -gt 1 ]; then
+    train_cmd+=(--resume-from "${run_resume_from}" --start-stage "${run_resume_stage}")
+  fi
+  "${train_cmd[@]}" 2>&1 | tee -a "${LOG_FILE}"
 
   safe_cleanup_dir "${EVAL_TMP_DIR}"
   mkdir -p "${EVAL_TMP_DIR}"
@@ -507,7 +633,7 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
       --seed-step 1 \
       --main-similarity "${MAIN_SIMILARITY}" \
       --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
-  else
+  elif [ "${EVAL_TASK}" = "triplet" ]; then
     python examples/evaluate_triplet_pretrained.py \
       --model-name "${MODEL_DIR}" \
       --triplet-path "${TRIPLET_PATH}" \
@@ -523,6 +649,24 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
       --delimiter "${TRIPLET_DELIMITER}" \
       --quoting "${TRIPLET_QUOTING}" \
       --has-header "${TRIPLET_HAS_HEADER}" \
+      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+  else
+    python examples/evaluate_senteval.py \
+      --model-name "${MODEL_DIR}" \
+      --senteval-toolkit-path "${SENTEVAL_TOOLKIT_PATH}" \
+      --senteval-data-path "${SENTEVAL_DATA_PATH}" \
+      --tasks "${SENTEVAL_TASKS}" \
+      --batch-size "${BATCH_SIZE}" \
+      --kfold "${SENTEVAL_KFOLD}" \
+      --main-metric "${SENTEVAL_MAIN_METRIC}" \
+      --classifier-nhid "${SENTEVAL_CLASSIFIER_NHID}" \
+      --classifier-optim "${SENTEVAL_CLASSIFIER_OPTIM}" \
+      --classifier-batch-size "${SENTEVAL_CLASSIFIER_BATCH_SIZE}" \
+      --classifier-tenacity "${SENTEVAL_CLASSIFIER_TENACITY}" \
+      --classifier-epoch-size "${SENTEVAL_CLASSIFIER_EPOCH_SIZE}" \
+      --seed "${run_seed}" \
+      --num-runs 1 \
+      --seed-step 1 \
       --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
   fi
 
@@ -547,7 +691,7 @@ print(json.dumps(row))
 PY
 done
 
-python - "${RUNS_JSONL}" "${SUMMARY_JSON}" "${SUMMARY_CSV}" "${MODEL_DIR}" "${NUM_RUNS}" "${SEED}" "${SEED_STEP}" "${EVAL_TASK}" "${MAIN_SIMILARITY}" "${STS_PATH}" "${STS_TEST_FILE}" "${MAIN_DISTANCE}" "${TRIPLET_PATH}" "${TRIPLET_TEST_FILE}" <<'PY'
+python - "${RUNS_JSONL}" "${SUMMARY_JSON}" "${SUMMARY_CSV}" "${MODEL_DIR}" "${NUM_RUNS}" "${SEED}" "${SEED_STEP}" "${EVAL_TASK}" "${MAIN_SIMILARITY}" "${STS_PATH}" "${STS_TEST_FILE}" "${MAIN_DISTANCE}" "${TRIPLET_PATH}" "${TRIPLET_TEST_FILE}" "${SENTEVAL_TOOLKIT_PATH}" "${SENTEVAL_DATA_PATH}" "${SENTEVAL_TASKS}" "${SENTEVAL_KFOLD}" "${SENTEVAL_MAIN_METRIC}" <<'PY'
 import csv
 import json
 import statistics
@@ -567,6 +711,11 @@ sts_test_file = sys.argv[11]
 main_distance = sys.argv[12]
 triplet_path = sys.argv[13]
 triplet_test_file = sys.argv[14]
+senteval_toolkit_path = sys.argv[15]
+senteval_data_path = sys.argv[16]
+senteval_tasks = sys.argv[17]
+senteval_kfold = int(sys.argv[18])
+senteval_main_metric = sys.argv[19]
 
 runs = []
 with open(runs_jsonl, encoding="utf-8") as f_in:
@@ -605,6 +754,12 @@ if eval_task == "triplet":
     summary["main_distance"] = main_distance
     summary["triplet_path"] = triplet_path
     summary["triplet_test_file"] = triplet_test_file
+elif eval_task == "senteval":
+    summary["senteval_toolkit_path"] = senteval_toolkit_path
+    summary["senteval_data_path"] = senteval_data_path
+    summary["senteval_tasks"] = [task.strip() for task in senteval_tasks.split(",") if task.strip()]
+    summary["senteval_kfold"] = senteval_kfold
+    summary["senteval_main_metric"] = senteval_main_metric
 else:
     summary["main_similarity"] = main_similarity
     summary["sts_path"] = sts_path

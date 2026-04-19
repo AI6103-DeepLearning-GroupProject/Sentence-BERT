@@ -9,6 +9,7 @@ import csv
 import logging
 import math
 import os
+import shutil
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -27,9 +28,11 @@ def _parse_args():
     parser.add_argument("--experiment", type=str, required=True, help="Experiment name inside config.experiments")
     parser.add_argument("--seed", type=int, default=None, help="Override seed from config")
     parser.add_argument("--model-variant", type=str, default=None, help="Runtime model variant key from config.runtime.model_variants")
-    parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, sts+nli")
+    parser.add_argument("--data-mode", type=str, default=None, help="Runtime data mode key from config.runtime.data_modes. Examples: sts, nli, nli+mnrl, sts+nli")
     parser.add_argument("--epochs", type=int, default=None, help="Runtime epoch override for stages that do not set num_epochs explicitly")
     parser.add_argument("--output-path", type=str, default=None, help="Override output directory")
+    parser.add_argument("--resume-from", type=str, default=None, help="Load model from an existing path before training")
+    parser.add_argument("--start-stage", type=int, default=1, help="1-based runtime stage index to start from")
     return parser.parse_args()
 
 
@@ -106,14 +109,20 @@ def _resolve_runtime_plan(config: dict, args) -> Optional[dict]:
         raise ValueError("Runtime data_mode '{}' has no stages configured".format(data_mode_key))
 
     base_training_cfg = dict(config.get("training", {}))
+    # In runtime mode, stage epoch control should come from:
+    # 1) stage.training.num_epochs (highest priority)
+    # 2) runtime.epochs / --epochs
+    # Global training.num_epochs should not silently override runtime.epochs.
+    base_training_cfg.pop("num_epochs", None)
     stages = []
     for stage_idx, stage_cfg in enumerate(stages_cfg):
         if "task" not in stage_cfg or "data" not in stage_cfg:
             raise ValueError("runtime.data_modes.{}.stages[{}] must define task and data".format(data_mode_key, stage_idx))
 
+        stage_local_training_cfg = stage_cfg.get("training", {})
         stage_training_cfg = dict(base_training_cfg)
-        stage_training_cfg.update(stage_cfg.get("training", {}))
-        if "num_epochs" not in stage_training_cfg:
+        stage_training_cfg.update(stage_local_training_cfg)
+        if "num_epochs" not in stage_local_training_cfg:
             stage_training_cfg["num_epochs"] = epochs
 
         stage_name = stage_cfg.get("name", "stage{}".format(stage_idx + 1))
@@ -180,8 +189,11 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     text1_col_idx = data_cfg.get("text1_col_idx", 0)
     text2_col_idx = data_cfg.get("text2_col_idx", 1)
     max_examples = data_cfg.get("max_examples", 0)
+    drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", True)
 
     examples = []
+    seen_pair_keys = set()
+    skipped_duplicate_pairs = 0
     with open(pairs_path, encoding="utf-8", newline="") as f_in:
         reader = csv.reader(f_in, delimiter=delimiter, quoting=quoting)
         if has_header:
@@ -197,6 +209,16 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
             if not text1 or not text2:
                 continue
 
+            if drop_mirror_pairs:
+                pair_key = (text1, text2) if text1 <= text2 else (text2, text1)
+            else:
+                pair_key = (text1, text2)
+
+            if pair_key in seen_pair_keys:
+                skipped_duplicate_pairs += 1
+                continue
+            seen_pair_keys.add(pair_key)
+
             guid = "{}-{}".format(os.path.basename(pairs_path), row_idx)
             examples.append(InputExample(guid=guid, texts=[text1, text2], label=1.0))
 
@@ -205,6 +227,13 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
 
     if not examples:
         raise ValueError("No valid sentence pairs found in {}".format(pairs_path))
+
+    if skipped_duplicate_pairs > 0:
+        logging.info(
+            "Filtered %d duplicate/mirrored pair rows while loading %s",
+            skipped_duplicate_pairs,
+            pairs_path,
+        )
 
     return examples
 
@@ -219,10 +248,6 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
     if task_type == "nli_softmax":
         nli_reader = NLIDataReader(data_cfg["nli_path"])
-        sts_reader = STSDataReader(
-            data_cfg["sts_path"],
-            normalize_scores=data_cfg.get("normalize_scores", True),
-        )
 
         train_data = SentencesDataset(nli_reader.get_examples(data_cfg.get("nli_train_file", "train.gz")), model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
@@ -232,13 +257,22 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             num_labels=nli_reader.get_num_labels(),
         )
 
-        dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
-        dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-        evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+        evaluator = None
+        test_evaluator = None
+        sts_path = data_cfg.get("sts_path")
+        if sts_path:
+            sts_reader = STSDataReader(
+                sts_path,
+                normalize_scores=data_cfg.get("normalize_scores", True),
+            )
 
-        test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
-        test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-        test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+            dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+            test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+            test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
         return train_dataloader, train_loss, evaluator, test_evaluator
 
     if task_type == "sts_cosine":
@@ -372,12 +406,23 @@ def main():
         logging.info("Runtime mode enabled: model_variant=%s, data_mode=%s", runtime_plan["model_variant"], runtime_plan["data_mode"])
         logging.info("Output path: %s", output_path)
 
-        model = _build_model(runtime_plan["model"])
+        if args.resume_from:
+            model = SentenceTransformer(args.resume_from)
+            logging.info("Resuming model from: %s", args.resume_from)
+        else:
+            model = _build_model(runtime_plan["model"])
+
         final_test_evaluator = None
         final_save_best_model = True
 
         total_stages = len(runtime_plan["stages"])
-        for stage_idx, stage_cfg in enumerate(runtime_plan["stages"]):
+        if args.start_stage < 1 or args.start_stage > total_stages:
+            raise ValueError("--start-stage must be within [1, {}], got {}".format(total_stages, args.start_stage))
+        if args.start_stage > 1:
+            logging.info("Skip first %d stage(s), start from stage %d/%d", args.start_stage - 1, args.start_stage, total_stages)
+
+        for stage_idx in range(args.start_stage - 1, total_stages):
+            stage_cfg = runtime_plan["stages"][stage_idx]
             stage_name = stage_cfg["name"]
             is_last_stage = (stage_idx == total_stages - 1)
 
@@ -385,11 +430,24 @@ def main():
             train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
 
             stage_training_cfg = dict(stage_cfg["training"])
+            pending_swap = None
             if not is_last_stage:
                 stage_training_cfg["save_best_model"] = False
                 stage_output_path = None
             else:
                 stage_output_path = output_path
+                # fit() refuses non-empty output dirs. For resume-in-place, save to tmp then swap.
+                if (
+                    args.resume_from
+                    and os.path.abspath(args.resume_from) == os.path.abspath(output_path)
+                    and os.path.isdir(output_path)
+                    and os.listdir(output_path)
+                ):
+                    tmp_output_path = output_path + ".tmp_save"
+                    if os.path.isdir(tmp_output_path):
+                        shutil.rmtree(tmp_output_path)
+                    stage_output_path = tmp_output_path
+                    pending_swap = (tmp_output_path, output_path)
 
             fit_kwargs = _build_fit_kwargs(
                 train_dataloader=train_dataloader,
@@ -402,6 +460,12 @@ def main():
             )
             logging.info("Stage %s warmup steps: %s", stage_name, fit_kwargs["warmup_steps"])
             model.fit(**fit_kwargs)
+
+            if pending_swap is not None:
+                tmp_output_path, final_output_path = pending_swap
+                if os.path.isdir(final_output_path):
+                    shutil.rmtree(final_output_path)
+                shutil.move(tmp_output_path, final_output_path)
 
             final_test_evaluator = test_evaluator
             final_save_best_model = stage_training_cfg.get("save_best_model", True)
