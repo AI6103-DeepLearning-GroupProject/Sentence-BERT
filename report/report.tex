@@ -178,9 +178,58 @@ The completed setting provides a functional reference point for verifying the ev
 Since only one model setting has been fully reported, no strong comparative conclusion is drawn yet.
 The next step is to populate the blank rows with trained checkpoints under identical evaluation settings.
 
-\section{Ablation Study}
+\section{Case Study: Failure Analysis}
 
-\lipsum[1] % Placeholder
+Although MNRL improves STS in our \texttt{sts+nli+mnrl} setting, it does not consistently transfer to
+all evaluation protocols. We observe two negative cases from completed experiments:
+(1) a small but consistent degradation on Wiki Triplets retrieval accuracy, and
+(2) a drop on SentEval transfer classification when comparing \texttt{nli+mnrl} against \texttt{nli}.
+
+\begin{table}[ht]
+\centering
+\caption{Failure cases of MNRL on different tasks.}
+\label{tab:failure-aggregate}
+\begin{tabular}{lccc}
+\hline
+Benchmark / Metric & Baseline & +MNRL & $\Delta$ \\
+\hline
+Wiki Triplets & 80.80 & 80.42 & $-0.38$ \\
+SentEval (mean) & 85.18 & 84.80 & $-0.38$ \\
+\hline
+\end{tabular}
+\end{table}
+
+For SentEval, the degradation is not limited to a single run: with seeds 42/43/44,
+the run-level score differences are all negative ($-0.51$, $-0.31$, $-0.33$).
+Task-wise differences are shown in Table~\ref{tab:failure-senteval-task}.
+
+\begin{table}[ht]
+\centering
+\caption{SentEval task-level change (\texttt{nli+mnrl} minus \texttt{nli}, in points).}
+\label{tab:failure-senteval-task}
+\begin{tabular}{lc}
+\hline
+Task & $\Delta$ \\
+\hline
+MR Acc. & $-1.23$ \\
+CR Acc. & $-0.40$ \\
+SUBJ Acc. & $+0.86$ \\
+MPQA Acc. & $-0.39$ \\
+SST2 Acc. & $-1.26$ \\
+TREC Acc. & $+0.27$ \\
+MRPC Acc. & $-0.52$ \\
+MRPC F1 & $-1.00$ \\
+\hline
+\end{tabular}
+\end{table}
+
+We attribute these failures to objective-task mismatch and data noise sensitivity.
+MNRL emphasizes pairwise alignment with in-batch negatives, which is effective for similarity retrieval
+but may weaken decision boundaries required by transfer classification tasks.
+For Wiki Triplets, converting triplets to pair-only contrastive supervision can introduce noisy positives/negatives,
+and the observed reduction across all three distance metrics suggests a broad embedding geometry shift rather than
+an isolated metric artifact.
+Finally, the Wiki comparison currently uses one run only, so the trend should be validated with multi-seed repetitions.
 
 \section{Conclusion}
 
