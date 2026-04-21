@@ -82,6 +82,18 @@ PY
 if [ -z "${MODEL_NAME}" ]; then
   MODEL_NAME="$(read_root_cfg "slurm.eval.model_name" "bert-base-nli-mean-tokens")"
 fi
+MODEL_NAME="${MODEL_NAME//\\//}"
+
+if [ "${MODEL_NAME}" = "bert-base-nli-mean-tokens" ]; then
+  TRAIN_RESULT_DIR="$(read_root_cfg "slurm.train.result_dir" "")"
+  TRAIN_RESULT_DIR="${TRAIN_RESULT_DIR//\\//}"
+  if [ -n "${TRAIN_RESULT_DIR}" ]; then
+    TRAIN_MODEL_DIR="${TRAIN_RESULT_DIR%/}/model"
+    if [ -d "${TRAIN_MODEL_DIR}" ]; then
+      MODEL_NAME="${TRAIN_MODEL_DIR}"
+    fi
+  fi
+fi
 if [ -z "${STS_PATH}" ]; then
   STS_PATH="$(read_root_cfg "slurm.eval.sts_path" "datasets/stsbenchmark")"
 fi
@@ -107,9 +119,9 @@ if [ -z "${DATA_AUTO_DOWNLOAD}" ]; then
   DATA_AUTO_DOWNLOAD="$(read_root_cfg "slurm.eval.data_auto_download" "1")"
 fi
 
-SAFE_MODEL_NAME="${MODEL_NAME//\//_}"
+SAFE_MODEL_NAME="$(echo "${MODEL_NAME}" | sed 's#[/\\:]#_#g')"
 if [ -z "${OUTPUT_DIR}" ]; then
-  OUTPUT_DIR="output/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}"
+  OUTPUT_DIR="result/eval_pretrained_${SAFE_MODEL_NAME}_${SLURM_JOB_ID}"
 fi
 mkdir -p "${OUTPUT_DIR}"
 
@@ -118,6 +130,15 @@ export TOKENIZERS_PARALLELISM=false
 
 LOG_FILE="result/logs/eval_${SAFE_MODEL_NAME}-${SLURM_JOB_ID}.log"
 STS_TEST_PATH="${STS_PATH}/${STS_TEST_FILE}"
+
+run_and_log() {
+  "$@" 2>&1 | tee -a "${LOG_FILE}"
+  local cmd_status=${PIPESTATUS[0]}
+  if [ "${cmd_status}" -ne 0 ]; then
+    echo "Command failed (exit=${cmd_status}): $*" >&2
+    exit "${cmd_status}"
+  fi
+}
 
 sync_stsbenchmark() {
   local source_base src_dir file_name
@@ -154,7 +175,22 @@ if [ ! -f "${STS_TEST_PATH}" ]; then
   exit 1
 fi
 
-python examples/evaluate_pretrained.py \
+if [[ "${MODEL_NAME}" == */* ]] && [ ! -d "${MODEL_NAME}" ]; then
+  echo "MODEL_NAME looks like a local path but directory does not exist: ${MODEL_NAME}" >&2
+  exit 1
+fi
+
+if [[ "${MODEL_NAME}" == result/* || "${MODEL_NAME}" == output/* || "${MODEL_NAME}" == ./* || "${MODEL_NAME}" == ../* ]] && [ ! -d "${MODEL_NAME}" ]; then
+  echo "MODEL_NAME appears to be a local project path but does not exist: ${MODEL_NAME}" >&2
+  exit 1
+fi
+
+echo "Eval model: ${MODEL_NAME}" | tee -a "${LOG_FILE}"
+echo "STS test: ${STS_TEST_PATH}" | tee -a "${LOG_FILE}"
+echo "Output dir: ${OUTPUT_DIR}" | tee -a "${LOG_FILE}"
+echo "Seed runs: num_runs=${NUM_RUNS}, seed_start=${SEED}, seed_step=${SEED_STEP}" | tee -a "${LOG_FILE}"
+
+run_and_log python examples/evaluate_pretrained.py \
   --model-name "${MODEL_NAME}" \
   --sts-path "${STS_PATH}" \
   --sts-test-file "${STS_TEST_FILE}" \
@@ -163,4 +199,4 @@ python examples/evaluate_pretrained.py \
   --num-runs "${NUM_RUNS}" \
   --seed-step "${SEED_STEP}" \
   --main-similarity "${MAIN_SIMILARITY}" \
-  --output-path "${OUTPUT_DIR}" 2>&1 | tee "${LOG_FILE}"
+  --output-path "${OUTPUT_DIR}"

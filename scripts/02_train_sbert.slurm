@@ -344,7 +344,7 @@ normalize_flat_datasets() {
 }
 
 build_contrastive_pairs_if_needed() {
-  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ]; then
+  if [ "${EXPERIMENT}" = "runtime" ] && { [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ] || [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_aoe" ]; }; then
     local sts_pairs_file="datasets/contrastive/pairs_train.tsv"
     if [ ! -f "${sts_pairs_file}" ]; then
       if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
@@ -355,6 +355,21 @@ build_contrastive_pairs_if_needed() {
           --output-path "${sts_pairs_file}"
       else
         echo "Skip STS/NLI pair build for now: source files are not ready yet."
+      fi
+    fi
+  fi
+
+  if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_aoe" ]; then
+    local aoe_pairs_file="datasets/contrastive/aoe_pairs_train.tsv"
+    if [ ! -f "${aoe_pairs_file}" ]; then
+      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
+        echo "Building AoE supervised pairs from NLI+STS..."
+        python examples/datasets/build_aoe_pairs.py \
+          --allnli-path datasets/AllNLI \
+          --sts-path datasets/stsbenchmark \
+          --output-path "${aoe_pairs_file}"
+      else
+        echo "Skip AoE pair build for now: source files are not ready yet."
       fi
     fi
   fi
@@ -418,6 +433,15 @@ safe_cleanup_dir() {
   esac
 }
 
+run_and_log() {
+  "$@" 2>&1 | tee -a "${LOG_FILE}"
+  local cmd_status=${PIPESTATUS[0]}
+  if [ "${cmd_status}" -ne 0 ]; then
+    echo "Command failed (exit=${cmd_status}): $*" >&2
+    exit "${cmd_status}"
+  fi
+}
+
 sync_known_datasets
 normalize_flat_datasets
 build_contrastive_pairs_if_needed
@@ -462,6 +486,18 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/contrastive/pairs_train.tsv"
       )
       ;;
+    sts_nli_mnrl_aoe)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+        "datasets/contrastive/pairs_train.tsv"
+        "datasets/contrastive/aoe_pairs_train.tsv"
+      )
+      ;;
     nli_mnrl)
       required_files=(
         "datasets/AllNLI/s1.train.gz"
@@ -486,7 +522,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
       )
       ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, sts_nli_mnrl_aoe, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
       exit 1
       ;;
   esac
@@ -617,13 +653,13 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
   if [ "${run_resume_stage}" -gt 1 ]; then
     train_cmd+=(--resume-from "${run_resume_from}" --start-stage "${run_resume_stage}")
   fi
-  "${train_cmd[@]}" 2>&1 | tee -a "${LOG_FILE}"
+  run_and_log "${train_cmd[@]}"
 
   safe_cleanup_dir "${EVAL_TMP_DIR}"
   mkdir -p "${EVAL_TMP_DIR}"
 
   if [ "${EVAL_TASK}" = "sts" ]; then
-    python examples/evaluate_pretrained.py \
+    run_and_log python examples/evaluate_pretrained.py \
       --model-name "${MODEL_DIR}" \
       --sts-path "${STS_PATH}" \
       --sts-test-file "${STS_TEST_FILE}" \
@@ -632,9 +668,9 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
       --num-runs 1 \
       --seed-step 1 \
       --main-similarity "${MAIN_SIMILARITY}" \
-      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+      --output-path "${EVAL_TMP_DIR}"
   elif [ "${EVAL_TASK}" = "triplet" ]; then
-    python examples/evaluate_triplet_pretrained.py \
+    run_and_log python examples/evaluate_triplet_pretrained.py \
       --model-name "${MODEL_DIR}" \
       --triplet-path "${TRIPLET_PATH}" \
       --triplet-test-file "${TRIPLET_TEST_FILE}" \
@@ -649,9 +685,9 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
       --delimiter "${TRIPLET_DELIMITER}" \
       --quoting "${TRIPLET_QUOTING}" \
       --has-header "${TRIPLET_HAS_HEADER}" \
-      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+      --output-path "${EVAL_TMP_DIR}"
   else
-    python examples/evaluate_senteval.py \
+    run_and_log python examples/evaluate_senteval.py \
       --model-name "${MODEL_DIR}" \
       --senteval-toolkit-path "${SENTEVAL_TOOLKIT_PATH}" \
       --senteval-data-path "${SENTEVAL_DATA_PATH}" \
@@ -667,15 +703,142 @@ for run_idx in $(seq 1 "${NUM_RUNS}"); do
       --seed "${run_seed}" \
       --num-runs 1 \
       --seed-step 1 \
-      --output-path "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+      --output-path "${EVAL_TMP_DIR}"
   fi
 
-  python - "${EVAL_TMP_DIR}/summary.json" "${run_idx}" >> "${RUNS_JSONL}" <<'PY'
+  if [ "${EVAL_TASK}" = "sts" ] && [ ! -f "${EVAL_TMP_DIR}/summary.json" ]; then
+    echo "Primary STS evaluator produced no summary.json. Running fallback STS evaluator..." | tee -a "${LOG_FILE}"
+    run_and_log python - "${MODEL_DIR}" "${STS_PATH}" "${STS_TEST_FILE}" "${BATCH_SIZE}" "${run_seed}" "${MAIN_SIMILARITY}" "${EVAL_TMP_DIR}" <<'PY'
+import csv
 import json
+import os
 import sys
 
-summary_path = sys.argv[1]
+from torch.utils.data import DataLoader
+
+from sentence_transformers import SentenceTransformer, SentencesDataset
+from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
+from sentence_transformers.evaluation import SimilarityFunction
+from sentence_transformers.readers import STSDataReader
+from sentence_transformers.util import set_seed
+
+
+def resolve_main_similarity(name):
+    if name == "cosine":
+        return SimilarityFunction.COSINE
+    if name == "euclidean":
+        return SimilarityFunction.EUCLIDEAN
+    if name == "manhattan":
+        return SimilarityFunction.MANHATTAN
+    if name == "dot":
+        return SimilarityFunction.DOT_PRODUCT
+    return None
+
+
+def read_eval_metrics(csv_path):
+    with open(csv_path, newline="", encoding="utf-8") as f_in:
+        rows = list(csv.DictReader(f_in))
+    if not rows:
+        raise ValueError("No rows found in {}".format(csv_path))
+    last_row = rows[-1]
+    metrics = {}
+    for key, value in last_row.items():
+        if key in {"epoch", "steps"}:
+            continue
+        metrics[key] = float(value)
+    return metrics
+
+
+model_name = sys.argv[1]
+sts_path = sys.argv[2]
+sts_test_file = sys.argv[3]
+batch_size = int(sys.argv[4])
+seed = int(sys.argv[5])
+main_similarity_name = sys.argv[6]
+output_path = sys.argv[7]
+
+os.makedirs(output_path, exist_ok=True)
+
+set_seed(seed, deterministic=True)
+model = SentenceTransformer(model_name)
+sts_reader = STSDataReader(sts_path)
+test_data = SentencesDataset(examples=sts_reader.get_examples(sts_test_file), model=model)
+test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+evaluator = EmbeddingSimilarityEvaluator(
+    test_dataloader,
+    name="sts_test",
+    main_similarity=resolve_main_similarity(main_similarity_name),
+)
+
+score = model.evaluate(evaluator, output_path=output_path)
+metrics = read_eval_metrics(os.path.join(output_path, "similarity_evaluation_sts_test_results.csv"))
+
+summary = {
+    "model_name": model_name,
+    "sts_path": sts_path,
+    "sts_test_file": sts_test_file,
+    "batch_size": batch_size,
+    "main_similarity": main_similarity_name,
+    "num_runs": 1,
+    "seed_start": seed,
+    "seed_step": 1,
+    "seeds": [seed],
+    "aggregate": {"score_mean": float(score), "score_std": 0.0},
+    "runs": [
+        {
+            "run_index": 1,
+            "seed": seed,
+            "score": float(score),
+            "metrics": metrics,
+            "output_path": output_path,
+        }
+    ],
+    "output_path": output_path,
+}
+
+for key, value in metrics.items():
+    summary["aggregate"]["{}_mean".format(key)] = float(value)
+    summary["aggregate"]["{}_std".format(key)] = 0.0
+
+with open(os.path.join(output_path, "summary.json"), "w", encoding="utf-8") as f_out:
+    json.dump(summary, f_out, indent=2)
+
+with open(os.path.join(output_path, "summary_table.csv"), "w", newline="", encoding="utf-8") as f_out:
+    fieldnames = ["run_index", "seed", "score"] + sorted(metrics.keys())
+    writer = csv.DictWriter(f_out, fieldnames=fieldnames)
+    writer.writeheader()
+    row = {"run_index": 1, "seed": seed, "score": float(score)}
+    row.update(metrics)
+    writer.writerow(row)
+PY
+  fi
+
+  echo "Eval artifact dir: ${EVAL_TMP_DIR}" | tee -a "${LOG_FILE}"
+  ls -la "${EVAL_TMP_DIR}" 2>&1 | tee -a "${LOG_FILE}" || true
+  find "${RESULT_DIR}" -maxdepth 4 -name "summary.json" 2>/dev/null | tee -a "${LOG_FILE}" || true
+
+  python - "${EVAL_TMP_DIR}/summary.json" "${run_idx}" >> "${RUNS_JSONL}" <<'PY'
+import glob
+import json
+import os
+import sys
+
+summary_path = sys.argv[1].strip().strip("\"'“”‘’")
 run_index = int(sys.argv[2])
+
+if not os.path.isfile(summary_path):
+    eval_dir = os.path.dirname(summary_path)
+    candidates = sorted(glob.glob(os.path.join(eval_dir, "**", "summary.json"), recursive=True))
+    if candidates:
+        summary_path = candidates[0]
+    else:
+        raise FileNotFoundError(
+            "Evaluation summary is missing: {}. Files under {}: {}".format(
+                summary_path,
+                eval_dir,
+                sorted(os.listdir(eval_dir)) if os.path.isdir(eval_dir) else "<missing dir>",
+            )
+        )
 
 with open(summary_path, encoding="utf-8") as f_in:
     summary = json.load(f_in)

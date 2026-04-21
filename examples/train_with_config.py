@@ -238,6 +238,66 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     return examples
 
 
+def _load_scored_pair_examples(data_cfg: dict) -> List[InputExample]:
+    pairs_path = data_cfg["pairs_path"]
+    delimiter = data_cfg.get("delimiter", "\t")
+    quoting = _parse_csv_quoting(data_cfg.get("quoting", "QUOTE_MINIMAL"))
+    has_header = data_cfg.get("has_header", False)
+    text1_col_idx = data_cfg.get("text1_col_idx", 0)
+    text2_col_idx = data_cfg.get("text2_col_idx", 1)
+    score_col_idx = data_cfg.get("score_col_idx", 2)
+    max_examples = data_cfg.get("max_examples", 0)
+    drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", False)
+
+    examples = []
+    seen_pair_keys = set()
+    skipped_duplicate_pairs = 0
+    with open(pairs_path, encoding="utf-8", newline="") as f_in:
+        reader = csv.reader(f_in, delimiter=delimiter, quoting=quoting)
+        if has_header:
+            next(reader, None)
+
+        for row_idx, row in enumerate(reader):
+            max_col_idx = max(text1_col_idx, text2_col_idx, score_col_idx)
+            if len(row) <= max_col_idx:
+                continue
+
+            text1 = row[text1_col_idx].strip()
+            text2 = row[text2_col_idx].strip()
+            if not text1 or not text2:
+                continue
+
+            try:
+                score = float(row[score_col_idx])
+            except ValueError:
+                continue
+
+            if drop_mirror_pairs:
+                pair_key = (text1, text2) if text1 <= text2 else (text2, text1)
+                if pair_key in seen_pair_keys:
+                    skipped_duplicate_pairs += 1
+                    continue
+                seen_pair_keys.add(pair_key)
+
+            guid = "{}-{}".format(os.path.basename(pairs_path), row_idx)
+            examples.append(InputExample(guid=guid, texts=[text1, text2], label=score))
+
+            if 0 < max_examples <= len(examples):
+                break
+
+    if not examples:
+        raise ValueError("No valid scored sentence pairs found in {}".format(pairs_path))
+
+    if skipped_duplicate_pairs > 0:
+        logging.info(
+            "Filtered %d duplicate/mirrored scored pair rows while loading %s",
+            skipped_duplicate_pairs,
+            pairs_path,
+        )
+
+    return examples
+
+
 def _build_task_components(config: dict, model: SentenceTransformer):
     task_cfg = config["task"]
     training_cfg = config["training"]
@@ -326,6 +386,39 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         train_data = SentencesDataset(pair_examples, model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
         train_loss = losses.MultipleNegativesRankingLoss(model)
+
+        evaluator = None
+        test_evaluator = None
+        sts_path = data_cfg.get("sts_path")
+        if sts_path:
+            sts_reader = STSDataReader(
+                sts_path,
+                normalize_scores=data_cfg.get("normalize_scores", True),
+            )
+
+            dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+            dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+            test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+            test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+
+        return train_dataloader, train_loss, evaluator, test_evaluator
+
+    if task_type == "aoe_rank_contrastive":
+        pair_examples = _load_scored_pair_examples(data_cfg)
+        train_data = SentencesDataset(pair_examples, model=model)
+        train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
+        train_loss = losses.AoECombinedLoss(
+            sentence_embedder=model,
+            angle_weight=task_cfg.get("angle_weight", 1.0),
+            contrastive_weight=task_cfg.get("contrastive_weight", 1.0),
+            angle_temperature=task_cfg.get("angle_temperature", 0.05),
+            contrastive_temperature=task_cfg.get("contrastive_temperature", 0.05),
+            contrastive_symmetric=task_cfg.get("contrastive_symmetric", True),
+            eps=task_cfg.get("eps", 1e-8),
+        )
 
         evaluator = None
         test_evaluator = None
