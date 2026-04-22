@@ -354,6 +354,32 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
         return train_dataloader, train_loss, evaluator, test_evaluator
 
+    if task_type == "sts_aoe":
+        sts_reader = STSDataReader(
+            data_cfg["sts_path"],
+            normalize_scores=data_cfg.get("normalize_scores", True),
+        )
+
+        train_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_train_file", "sts-train.csv")), model=model)
+        train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
+        train_loss = losses.AoELiteLoss(
+            model=model,
+            cosine_weight=task_cfg.get("cosine_weight", 1.0),
+            angle_weight=task_cfg.get("angle_weight", 0.02),
+            cosine_tau=task_cfg.get("cosine_tau", 20.0),
+            angle_tau=task_cfg.get("angle_tau", 20.0),
+            eps=task_cfg.get("eps", 1e-8),
+        )
+
+        dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+        dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+        evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+        test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+        test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+        test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+        return train_dataloader, train_loss, evaluator, test_evaluator
+
     if task_type == "triplet":
         triplet_reader = TripletReader(
             data_cfg["triplet_path"],

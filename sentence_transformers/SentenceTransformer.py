@@ -85,7 +85,12 @@ class SentenceTransformer(nn.Sequential):
 
         super().__init__(modules)
         if device is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
             logging.info("Use pytorch device: {}".format(device))
         self.device = torch.device(device)
         self.to(device)
@@ -285,7 +290,7 @@ class SentenceTransformer(nn.Sequential):
             dataloader.collate_fn = self.smart_batching_collate
 
         loss_models = [loss for _, loss in train_objectives]
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = self.device
         for loss_model in loss_models:
             loss_model.to(device)
 

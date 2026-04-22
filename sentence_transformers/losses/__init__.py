@@ -4,3 +4,4 @@ from .BatchHardTripletLoss import *
 from .MultipleNegativesRankingLoss import *
 from .TripletLoss import *
 from .AoECombinedLoss import *
+from .AoELiteLoss import *

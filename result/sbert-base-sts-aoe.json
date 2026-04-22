@@ -1,0 +1,86 @@
+{
+  "model_name": "result/exp_sts_aoe_3runs_v2/run_03_seed_44/model",
+  "sts_path": "datasets/stsbenchmark",
+  "sts_test_file": "sts-test.csv",
+  "batch_size": 64,
+  "main_similarity": "cosine",
+  "num_runs": 3,
+  "seed_start": 42,
+  "seed_step": 1,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "aggregate": {
+    "score_mean": 0.8580889815952066,
+    "score_std": 0.0022861486222568975,
+    "cosine_pearson_mean": 0.8482303533333333,
+    "cosine_pearson_std": 0.0020293195466789915,
+    "cosine_spearman_mean": 0.8580889815952066,
+    "cosine_spearman_std": 0.0022861486222568975,
+    "dot_pearson_mean": 0.71837908,
+    "dot_pearson_std": 0.018090071013105467,
+    "dot_spearman_mean": 0.700357034335392,
+    "dot_spearman_std": 0.01818328439879257,
+    "euclidean_pearson_mean": 0.8569766966666666,
+    "euclidean_pearson_std": 0.0029210663436891235,
+    "euclidean_spearman_mean": 0.8568439605073755,
+    "euclidean_spearman_std": 0.002961313750821788,
+    "manhattan_pearson_mean": 0.8566213866666667,
+    "manhattan_pearson_std": 0.0027551821254743506,
+    "manhattan_spearman_mean": 0.8565202729220289,
+    "manhattan_spearman_std": 0.0028515064189254752
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "seed": 42,
+      "score": 0.8602388646338819,
+      "metrics": {
+        "cosine_pearson": 0.85042536,
+        "cosine_spearman": 0.8602388646338819,
+        "euclidean_pearson": 0.8600671,
+        "euclidean_spearman": 0.8594744607397077,
+        "manhattan_pearson": 0.85953176,
+        "manhattan_spearman": 0.8590938917432354,
+        "dot_pearson": 0.73864424,
+        "dot_spearman": 0.7207859371971665
+      },
+      "output_path": "result/exp_sts_aoe_3runs_v2/run_01_seed_42/eval"
+    },
+    {
+      "run_index": 2,
+      "seed": 43,
+      "score": 0.8556873985594602,
+      "metrics": {
+        "cosine_pearson": 0.8478432,
+        "cosine_spearman": 0.8556873985594602,
+        "euclidean_pearson": 0.85426116,
+        "euclidean_spearman": 0.8536366928102707,
+        "manhattan_pearson": 0.8540534,
+        "manhattan_spearman": 0.8534548535262063,
+        "dot_pearson": 0.7038598,
+        "dot_spearman": 0.6859441573156074
+      },
+      "output_path": "result/exp_sts_aoe_3runs_v2/run_02_seed_43/eval"
+    },
+    {
+      "run_index": 3,
+      "seed": 44,
+      "score": 0.8583406815922777,
+      "metrics": {
+        "cosine_pearson": 0.8464225,
+        "cosine_spearman": 0.8583406815922777,
+        "euclidean_pearson": 0.85660183,
+        "euclidean_spearman": 0.8574207279721484,
+        "manhattan_pearson": 0.856279,
+        "manhattan_spearman": 0.8570120734966452,
+        "dot_pearson": 0.7126332,
+        "dot_spearman": 0.694341008493402
+      },
+      "output_path": "result/exp_sts_aoe_3runs_v2/run_03_seed_44/eval"
+    }
+  ],
+  "output_path": "result/exp_sts_aoe_3runs_v2"
+}
