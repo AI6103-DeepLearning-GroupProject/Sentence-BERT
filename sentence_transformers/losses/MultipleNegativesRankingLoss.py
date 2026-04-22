@@ -1,13 +1,14 @@
 import torch
 from torch import nn, Tensor
-from typing import Union, Tuple, List, Iterable, Dict
+from typing import Iterable, Dict
 import torch.nn.functional as F
 
 
 class MultipleNegativesRankingLoss(nn.Module):
-    def __init__(self, sentence_embedder):
+    def __init__(self, sentence_embedder, scale: float = 20.0):
         super(MultipleNegativesRankingLoss, self).__init__()
         self.sentence_embedder = sentence_embedder
+        self.scale = float(scale)
 
     def forward(self, sentence_features: Iterable[Dict[str, Tensor]], labels: Tensor):
         reps = [self.sentence_embedder(sentence_feature)['sentence_embedding'] for sentence_feature in sentence_features]
@@ -36,7 +37,9 @@ class MultipleNegativesRankingLoss(nn.Module):
         :return:
             The scalar loss
         """
-        scores = torch.matmul(embeddings_a, embeddings_b.t())
-        diagonal_mean = torch.mean(torch.diag(scores))
-        mean_log_row_sum_exp = torch.mean(torch.logsumexp(scores, dim=1))
-        return -diagonal_mean + mean_log_row_sum_exp
+        embeddings_a = F.normalize(embeddings_a, p=2, dim=1)
+        embeddings_b = F.normalize(embeddings_b, p=2, dim=1)
+
+        scores = torch.matmul(embeddings_a, embeddings_b.t()) * self.scale
+        labels = torch.arange(scores.size(0), device=scores.device)
+        return F.cross_entropy(scores, labels)

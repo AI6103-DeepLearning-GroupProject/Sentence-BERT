@@ -333,7 +333,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
             test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "sts_cosine":
         sts_reader = STSDataReader(
@@ -352,7 +352,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
         test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "sts_aoe":
         sts_reader = STSDataReader(
@@ -405,7 +405,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         test_data = SentencesDataset(triplet_reader.get_examples(data_cfg.get("test_file", "test.csv")), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
         test_evaluator = TripletEvaluator(test_dataloader)
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "mnrl_contrastive":
         pair_examples = _load_pair_examples(data_cfg)
@@ -430,7 +430,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
             test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
 
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "aoe_rank_contrastive":
         pair_examples = _load_scored_pair_examples(data_cfg)
@@ -463,20 +463,77 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
             test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
 
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
+
+    if task_type == "mnrl_aoe_joint":
+        # Objective 1: classic MNRL on positive pairs
+        mnrl_pair_examples = _load_pair_examples(data_cfg)
+        mnrl_batch_size = task_cfg.get("mnrl_batch_size", batch_size)
+        mnrl_train_data = SentencesDataset(mnrl_pair_examples, model=model)
+        mnrl_train_dataloader = DataLoader(mnrl_train_data, shuffle=True, batch_size=mnrl_batch_size)
+        mnrl_train_loss = losses.MultipleNegativesRankingLoss(model)
+
+        # Objective 2: AoE ranking objective (with optional contrastive term) on scored pairs
+        aoe_pairs_cfg = dict(data_cfg)
+        aoe_pairs_cfg["pairs_path"] = data_cfg.get("aoe_pairs_path", data_cfg.get("pairs_path"))
+        aoe_pairs_cfg["delimiter"] = data_cfg.get("aoe_delimiter", data_cfg.get("delimiter", "\t"))
+        aoe_pairs_cfg["quoting"] = data_cfg.get("aoe_quoting", data_cfg.get("quoting", "QUOTE_MINIMAL"))
+        aoe_pairs_cfg["has_header"] = data_cfg.get("aoe_has_header", data_cfg.get("has_header", False))
+        aoe_pairs_cfg["text1_col_idx"] = data_cfg.get("aoe_text1_col_idx", data_cfg.get("text1_col_idx", 0))
+        aoe_pairs_cfg["text2_col_idx"] = data_cfg.get("aoe_text2_col_idx", data_cfg.get("text2_col_idx", 1))
+        aoe_pairs_cfg["score_col_idx"] = data_cfg.get("aoe_score_col_idx", 2)
+        aoe_pairs_cfg["drop_mirror_pairs"] = data_cfg.get("aoe_drop_mirror_pairs", False)
+
+        aoe_pair_examples = _load_scored_pair_examples(aoe_pairs_cfg)
+        aoe_batch_size = task_cfg.get("aoe_batch_size", batch_size)
+        aoe_train_data = SentencesDataset(aoe_pair_examples, model=model)
+        aoe_train_dataloader = DataLoader(aoe_train_data, shuffle=True, batch_size=aoe_batch_size)
+        aoe_train_loss = losses.AoECombinedLoss(
+            sentence_embedder=model,
+            angle_weight=task_cfg.get("angle_weight", 1.0),
+            contrastive_weight=task_cfg.get("contrastive_weight", 0.0),
+            angle_temperature=task_cfg.get("angle_temperature", 0.05),
+            contrastive_temperature=task_cfg.get("contrastive_temperature", 0.05),
+            contrastive_symmetric=task_cfg.get("contrastive_symmetric", True),
+            eps=task_cfg.get("eps", 1e-8),
+        )
+
+        evaluator = None
+        test_evaluator = None
+        sts_path = data_cfg.get("sts_path")
+        if sts_path:
+            sts_reader = STSDataReader(
+                sts_path,
+                normalize_scores=data_cfg.get("normalize_scores", True),
+            )
+
+            dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+            dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+            test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+            test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+
+        train_objectives = [
+            (mnrl_train_dataloader, mnrl_train_loss),
+            (aoe_train_dataloader, aoe_train_loss),
+        ]
+        return train_objectives, evaluator, test_evaluator
 
     raise ValueError("Unknown task.type: {}".format(task_type))
 
 
-def _build_fit_kwargs(train_dataloader, train_loss, evaluator, training_cfg: dict, output_path: Optional[str], seed: int, deterministic: bool):
+def _build_fit_kwargs(train_objectives, evaluator, training_cfg: dict, output_path: Optional[str], seed: int, deterministic: bool):
     num_epochs = training_cfg.get("num_epochs", 1)
     warmup_steps = training_cfg.get("warmup_steps")
     if warmup_steps is None:
         warmup_ratio = training_cfg.get("warmup_ratio", 0.1)
-        warmup_steps = int(math.ceil(len(train_dataloader) * num_epochs * warmup_ratio))
+        min_steps_per_epoch = min(len(dataloader) for dataloader, _ in train_objectives)
+        warmup_steps = int(math.ceil(min_steps_per_epoch * num_epochs * warmup_ratio))
 
     fit_kwargs = {
-        "train_objectives": [(train_dataloader, train_loss)],
+        "train_objectives": train_objectives,
         "evaluator": evaluator,
         "epochs": num_epochs,
         "scheduler": training_cfg.get("scheduler", "WarmupLinear"),
@@ -546,7 +603,7 @@ def main():
             is_last_stage = (stage_idx == total_stages - 1)
 
             logging.info("Start stage %d/%d: %s", stage_idx + 1, total_stages, stage_name)
-            train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
+            train_objectives, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
 
             stage_training_cfg = dict(stage_cfg["training"])
             pending_swap = None
@@ -569,8 +626,7 @@ def main():
                     pending_swap = (tmp_output_path, output_path)
 
             fit_kwargs = _build_fit_kwargs(
-                train_dataloader=train_dataloader,
-                train_loss=train_loss,
+                train_objectives=train_objectives,
                 evaluator=evaluator,
                 training_cfg=stage_training_cfg,
                 output_path=stage_output_path,
@@ -595,14 +651,13 @@ def main():
         return
 
     model = _build_model(config["model"])
-    train_dataloader, train_loss, evaluator, test_evaluator = _build_task_components(config, model)
+    train_objectives, evaluator, test_evaluator = _build_task_components(config, model)
     training_cfg = config["training"]
     output_path = args.output_path or _build_output_path(args.experiment, config)
     logging.info("Output path: %s", output_path)
 
     fit_kwargs = _build_fit_kwargs(
-        train_dataloader=train_dataloader,
-        train_loss=train_loss,
+        train_objectives=train_objectives,
         evaluator=evaluator,
         training_cfg=training_cfg,
         output_path=output_path,
