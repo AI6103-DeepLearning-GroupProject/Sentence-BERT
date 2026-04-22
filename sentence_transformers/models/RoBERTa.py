@@ -4,6 +4,7 @@ from transformers import RobertaModel, RobertaTokenizer
 import json
 from typing import Union, Tuple, List, Dict
 import os
+import inspect
 import numpy as np
 import logging
 
@@ -81,7 +82,16 @@ class RoBERTa(nn.Module):
         return {key: self.__dict__[key] for key in self.config_keys}
 
     def save(self, output_path: str):
-        self.roberta.save_pretrained(output_path)
+        # transformers>=4 may default to safe serialization and require extra deps
+        # (e.g. safetensors). Keep compatibility with older/newer versions.
+        save_kwargs = {}
+        try:
+            if "safe_serialization" in inspect.signature(self.roberta.save_pretrained).parameters:
+                save_kwargs["safe_serialization"] = False
+        except (TypeError, ValueError):
+            pass
+
+        self.roberta.save_pretrained(output_path, **save_kwargs)
         self.tokenizer.save_pretrained(output_path)
 
         with open(os.path.join(output_path, 'sentence_roberta_config.json'), 'w') as fOut:
@@ -92,7 +102,6 @@ class RoBERTa(nn.Module):
         with open(os.path.join(input_path, 'sentence_roberta_config.json')) as fIn:
             config = json.load(fIn)
         return RoBERTa(model_name_or_path=input_path, **config)
-
 
 
 

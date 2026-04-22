@@ -287,6 +287,62 @@ experiments:
               training:
                 num_epochs: 1
 
+        sts_nli_mnrl_aoe:
+          stages:
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl_aoe_joint
+              task:
+                type: mnrl_aoe_joint
+                mnrl_batch_size: 32
+                aoe_batch_size: 32
+                angle_weight: 1.0
+                contrastive_weight: 0.8
+                angle_temperature: 0.05
+                contrastive_temperature: 0.05
+                contrastive_symmetric: true
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                aoe_pairs_path: datasets/contrastive/aoe_pairs_train.tsv
+                aoe_delimiter: "\t"
+                aoe_has_header: false
+                aoe_text1_col_idx: 0
+                aoe_text2_col_idx: 1
+                aoe_score_col_idx: 2
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+
         wikipedia_triplet:
           stages:
             - name: wikipedia_triplet
