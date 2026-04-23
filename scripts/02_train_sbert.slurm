@@ -346,9 +346,16 @@ normalize_flat_datasets() {
 build_contrastive_pairs_if_needed() {
   if [ "${EXPERIMENT}" = "runtime" ] && { [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ] || [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_aoe" ]; }; then
     local sts_pairs_file="datasets/contrastive/pairs_train.tsv"
-    if [ ! -f "${sts_pairs_file}" ]; then
-      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ] && [ -f "datasets/stsbenchmark/sts-train.csv" ]; then
-        echo "Building STS/NLI contrastive pairs for MNRL..."
+    local rebuild_pairs=0
+    if [ ! -s "${sts_pairs_file}" ]; then
+      rebuild_pairs=1
+    elif ! awk -F '\t' 'NR == 1 { exit (NF >= 3 ? 0 : 1) }' "${sts_pairs_file}"; then
+      echo "Existing MNRL pair file is legacy two-column format; rebuilding with hard negatives..."
+      rebuild_pairs=1
+    fi
+    if [ "${rebuild_pairs}" = "1" ]; then
+      if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ]; then
+        echo "Building NLI entailment/contradiction hard-negative examples for MNRL..."
         python examples/datasets/build_contrastive_pairs.py \
           --allnli-path datasets/AllNLI \
           --sts-path datasets/stsbenchmark \
@@ -376,9 +383,16 @@ build_contrastive_pairs_if_needed() {
 
   if [ "${EXPERIMENT}" = "runtime" ] && [ "${DATA_MODE_NORM}" = "nli_mnrl" ]; then
     local nli_pairs_file="datasets/contrastive/nli_pairs_train.tsv"
-    if [ ! -f "${nli_pairs_file}" ]; then
+    local rebuild_nli_pairs=0
+    if [ ! -s "${nli_pairs_file}" ]; then
+      rebuild_nli_pairs=1
+    elif ! awk -F '\t' 'NR == 1 { exit (NF >= 3 ? 0 : 1) }' "${nli_pairs_file}"; then
+      echo "Existing NLI MNRL pair file is legacy two-column format; rebuilding with hard negatives..."
+      rebuild_nli_pairs=1
+    fi
+    if [ "${rebuild_nli_pairs}" = "1" ]; then
       if [ -f "datasets/AllNLI/s1.train.gz" ] && [ -f "datasets/AllNLI/s2.train.gz" ] && [ -f "datasets/AllNLI/labels.train.gz" ]; then
-        echo "Building NLI-only contrastive pairs for MNRL..."
+        echo "Building NLI entailment/contradiction hard-negative examples for MNRL..."
         python examples/datasets/build_contrastive_pairs.py \
           --allnli-path datasets/AllNLI \
           --output-path "${nli_pairs_file}" \

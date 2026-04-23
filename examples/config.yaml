@@ -213,6 +213,8 @@ experiments:
                 has_header: false
                 text1_col_idx: 0
                 text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
               training:
                 num_epochs: 2
                 batch_size: 32
@@ -267,6 +269,8 @@ experiments:
                 has_header: false
                 text1_col_idx: 0
                 text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
                 sts_path: datasets/stsbenchmark
                 sts_dev_file: sts-dev.csv
                 sts_test_file: sts-test.csv
@@ -317,6 +321,8 @@ experiments:
                 has_header: false
                 text1_col_idx: 0
                 text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
                 aoe_pairs_path: datasets/contrastive/aoe_pairs_train.tsv
                 aoe_delimiter: "\t"
                 aoe_has_header: false
