@@ -189,7 +189,7 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     text1_col_idx = data_cfg.get("text1_col_idx", 0)
     text2_col_idx = data_cfg.get("text2_col_idx", 1)
     hard_negative_col_idx = data_cfg.get("hard_negative_col_idx", 2)
-    use_hard_negative = data_cfg.get("use_hard_negative", True)
+    use_hard_negative = data_cfg.get("use_hard_negative", False)
     max_examples = data_cfg.get("max_examples", 0)
     drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", True)
 
