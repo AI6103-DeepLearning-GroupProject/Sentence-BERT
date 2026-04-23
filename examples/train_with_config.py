@@ -188,12 +188,15 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     has_header = data_cfg.get("has_header", False)
     text1_col_idx = data_cfg.get("text1_col_idx", 0)
     text2_col_idx = data_cfg.get("text2_col_idx", 1)
+    hard_negative_col_idx = data_cfg.get("hard_negative_col_idx", 2)
+    use_hard_negative = data_cfg.get("use_hard_negative", True)
     max_examples = data_cfg.get("max_examples", 0)
     drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", True)
 
     examples = []
     seen_pair_keys = set()
     skipped_duplicate_pairs = 0
+    hard_negative_examples = 0
     with open(pairs_path, encoding="utf-8", newline="") as f_in:
         reader = csv.reader(f_in, delimiter=delimiter, quoting=quoting)
         if has_header:
@@ -209,6 +212,27 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
             if not text1 or not text2:
                 continue
 
+            texts = [text1, text2]
+            if use_hard_negative:
+                if len(row) <= hard_negative_col_idx:
+                    raise ValueError(
+                        "Configured use_hard_negative=true for {}, but row {} has no hard-negative column {}".format(
+                            pairs_path,
+                            row_idx,
+                            hard_negative_col_idx,
+                        )
+                    )
+                hard_negative = row[hard_negative_col_idx].strip()
+                if not hard_negative:
+                    raise ValueError(
+                        "Configured use_hard_negative=true for {}, but row {} has an empty hard-negative column".format(
+                            pairs_path,
+                            row_idx,
+                        )
+                    )
+                texts.append(hard_negative)
+                hard_negative_examples += 1
+
             if drop_mirror_pairs:
                 pair_key = (text1, text2) if text1 <= text2 else (text2, text1)
             else:
@@ -220,7 +244,7 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
             seen_pair_keys.add(pair_key)
 
             guid = "{}-{}".format(os.path.basename(pairs_path), row_idx)
-            examples.append(InputExample(guid=guid, texts=[text1, text2], label=1.0))
+            examples.append(InputExample(guid=guid, texts=texts, label=1.0))
 
             if 0 < max_examples <= len(examples):
                 break
@@ -234,6 +258,9 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
             skipped_duplicate_pairs,
             pairs_path,
         )
+
+    if use_hard_negative:
+        logging.info("Loaded %d MNRL examples with explicit hard negatives from %s", hard_negative_examples, pairs_path)
 
     return examples
 
@@ -335,7 +362,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
-    if task_type == "sts_cosine":
+    if task_type in ("sts_cosine", "sts_cosent"):
         sts_reader = STSDataReader(
             data_cfg["sts_path"],
             normalize_scores=data_cfg.get("normalize_scores", True),
@@ -343,7 +370,13 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
         train_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_train_file", "sts-train.csv")), model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
-        train_loss = losses.CosineSimilarityLoss(model=model)
+        if task_type == "sts_cosent":
+            train_loss = losses.CoSENTLoss(
+                model=model,
+                scale=task_cfg.get("scale", 20.0),
+            )
+        else:
+            train_loss = losses.CosineSimilarityLoss(model=model)
 
         dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
         dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
