@@ -362,7 +362,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
-    if task_type == "sts_cosine":
+    if task_type in ("sts_cosine", "sts_cosent"):
         sts_reader = STSDataReader(
             data_cfg["sts_path"],
             normalize_scores=data_cfg.get("normalize_scores", True),
@@ -370,7 +370,13 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
         train_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_train_file", "sts-train.csv")), model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
-        train_loss = losses.CosineSimilarityLoss(model=model)
+        if task_type == "sts_cosent":
+            train_loss = losses.CoSENTLoss(
+                model=model,
+                scale=task_cfg.get("scale", 20.0),
+            )
+        else:
+            train_loss = losses.CosineSimilarityLoss(model=model)
 
         dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
         dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)

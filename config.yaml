@@ -3,7 +3,7 @@ slurm:
     config_path: examples/config.yaml  # Training config file path; usually examples/config.yaml where experiments.* are defined.
     experiment: runtime  # runtime | nli_bert | sts_bert | sts_continue_training_bert | wikipedia_triplet_bert; as of examples/config.yaml -> experiments.<name>
     model_variant: sbert_base  # iff experiment=runtime; options: sbert_base | sbert_large | sroberta_base | sroberta_large; -> experiments.runtime.runtime.model_variants.<name>
-    data_mode: sts_nli_mnrl  # iff experiment=runtime; options: sts | nli | nli_mnrl | sts_nli | sts_nli_mnrl | sts_nli_mnrl_aoe| wikipedia_triplet | wikipedia_triplet_mnrl; -> examples/config.yaml: experiments.runtime.runtime.data_modes.<name>
+    data_mode: sts_nli_mnrl_cosent  # iff experiment=runtime; options: sts | nli | nli_mnrl | sts_nli | sts_nli_mnrl | sts_nli_mnrl_cosent | sts_nli_mnrl_aoe | wikipedia_triplet | wikipedia_triplet_mnrl; -> examples/config.yaml: experiments.runtime.runtime.data_modes.<name>
     epochs: 4  # Used only when experiment=runtime to override stage default epochs (applies to stages without stage.training.num_epochs).
     seed: 42  # Training random seed (passed to train_with_config.py --seed).
     num_runs: 1  # Number of train+eval cycles in scripts/02_train_sbert.slurm (different seeds across runs).
@@ -15,7 +15,7 @@ slurm:
 
   eval:
     task_type: sts  # sts | triplet | senteval | auto; auto picks triplet for wikipedia_* modes and sts otherwise.
-    model_name: "result/runtime_sbert_base_sts_nli_mnrl/model"  # HF model id or local model directory, e.g. bert-base-nli-mean-tokens or output/.../model.
+    model_name: "result/runtime_sbert_base_sts_nli_mnrl_cosent/model"  # HF model id or local model directory, e.g. bert-base-nli-mean-tokens or output/.../model.
     sts_path: datasets/stsbenchmark  # STSBenchmark dataset directory.
     sts_test_file: sts-test.csv  # Test file name under sts_path.
     triplet_path: datasets/wikipedia-sections-triplets  # Triplet dataset directory for wikipedia evaluations.

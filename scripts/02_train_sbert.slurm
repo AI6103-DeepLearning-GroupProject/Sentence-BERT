@@ -344,7 +344,7 @@ normalize_flat_datasets() {
 }
 
 build_contrastive_pairs_if_needed() {
-  if [ "${EXPERIMENT}" = "runtime" ] && { [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ] || [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_aoe" ]; }; then
+  if [ "${EXPERIMENT}" = "runtime" ] && { [ "${DATA_MODE_NORM}" = "sts_nli_mnrl" ] || [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_cosent" ] || [ "${DATA_MODE_NORM}" = "sts_nli_mnrl_aoe" ]; }; then
     local sts_pairs_file="datasets/contrastive/pairs_train.tsv"
     local rebuild_pairs=0
     if [ ! -s "${sts_pairs_file}" ]; then
@@ -489,7 +489,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/stsbenchmark/sts-test.csv"
       )
       ;;
-    sts_nli_mnrl)
+    sts_nli_mnrl|sts_nli_mnrl_cosent)
       required_files=(
         "datasets/AllNLI/s1.train.gz"
         "datasets/AllNLI/s2.train.gz"
@@ -536,7 +536,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
       )
       ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, sts_nli_mnrl_aoe, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, sts_nli_mnrl_cosent, sts_nli_mnrl_aoe, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
       exit 1
       ;;
   esac
