@@ -443,6 +443,37 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
+    if task_type == "mnrl_unireg_contrastive":
+        pair_examples = _load_pair_examples(data_cfg)
+        train_data = SentencesDataset(pair_examples, model=model)
+        train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
+        train_loss = losses.MultipleNegativesRankingUniRegLoss(
+            sentence_embedder=model,
+            scale=task_cfg.get("scale", 20.0),
+            uniformity_weight=task_cfg.get("uniformity_weight", 1e-3),
+            uniformity_t=task_cfg.get("uniformity_t", 2.0),
+            eps=task_cfg.get("eps", 1e-8),
+        )
+
+        evaluator = None
+        test_evaluator = None
+        sts_path = data_cfg.get("sts_path")
+        if sts_path:
+            sts_reader = STSDataReader(
+                sts_path,
+                normalize_scores=data_cfg.get("normalize_scores", True),
+            )
+
+            dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
+            dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
+            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+
+            test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
+            test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
+            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
+
     if task_type == "aoe_rank_contrastive":
         pair_examples = _load_scored_pair_examples(data_cfg)
         train_data = SentencesDataset(pair_examples, model=model)
