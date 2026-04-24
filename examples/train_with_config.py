@@ -17,7 +17,12 @@ import yaml
 from torch.utils.data import DataLoader
 
 from sentence_transformers import LoggingHandler, SentenceTransformer, SentencesDataset, losses, models
-from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator, TripletEvaluator
+from sentence_transformers.evaluation import (
+    EmbeddingDiagnosticsEvaluator,
+    EmbeddingSimilarityEvaluator,
+    SequentialEvaluator,
+    TripletEvaluator,
+)
 from sentence_transformers.readers import InputExample, NLIDataReader, STSDataReader, TripletReader
 from sentence_transformers.util import set_seed
 
@@ -179,6 +184,11 @@ def _parse_csv_quoting(quoting_value):
     if isinstance(quoting_value, str) and hasattr(csv, quoting_value):
         return getattr(csv, quoting_value)
     return csv.QUOTE_NONE
+
+
+def _with_embedding_diagnostics(base_evaluator, dataloader: DataLoader, name: str):
+    diagnostics_evaluator = EmbeddingDiagnosticsEvaluator(dataloader, name=name)
+    return SequentialEvaluator([diagnostics_evaluator, base_evaluator])
 
 
 def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
@@ -356,11 +366,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
             dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
             dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+            evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(dev_dataloader),
+                dev_dataloader,
+                name="sts_dev",
+            )
 
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            test_evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(test_dataloader),
+                test_dataloader,
+                name="sts_test",
+            )
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type in ("sts_cosine", "sts_cosent"):
@@ -383,11 +401,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
         dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
         dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-        evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+        evaluator = _with_embedding_diagnostics(
+            EmbeddingSimilarityEvaluator(dev_dataloader),
+            dev_dataloader,
+            name="sts_dev",
+        )
 
         test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-        test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+        test_evaluator = _with_embedding_diagnostics(
+            EmbeddingSimilarityEvaluator(test_dataloader),
+            test_dataloader,
+            name="sts_test",
+        )
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "triplet":
@@ -410,11 +436,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
             model=model,
         )
         dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-        evaluator = TripletEvaluator(dev_dataloader)
+        evaluator = _with_embedding_diagnostics(
+            TripletEvaluator(dev_dataloader),
+            dev_dataloader,
+            name="triplet_dev",
+        )
 
         test_data = SentencesDataset(triplet_reader.get_examples(data_cfg.get("test_file", "test.csv")), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-        test_evaluator = TripletEvaluator(test_dataloader)
+        test_evaluator = _with_embedding_diagnostics(
+            TripletEvaluator(test_dataloader),
+            test_dataloader,
+            name="triplet_test",
+        )
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "mnrl_contrastive":
@@ -435,11 +469,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
             dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
             dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+            evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(dev_dataloader),
+                dev_dataloader,
+                name="sts_dev",
+            )
 
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            test_evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(test_dataloader),
+                test_dataloader,
+                name="sts_test",
+            )
 
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
@@ -466,11 +508,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
             dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
             dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+            evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(dev_dataloader),
+                dev_dataloader,
+                name="sts_dev",
+            )
 
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            test_evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(test_dataloader),
+                test_dataloader,
+                name="sts_test",
+            )
 
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
@@ -499,11 +549,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
             dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
             dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+            evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(dev_dataloader),
+                dev_dataloader,
+                name="sts_dev",
+            )
 
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            test_evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(test_dataloader),
+                test_dataloader,
+                name="sts_test",
+            )
 
         return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
@@ -551,11 +609,19 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
             dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
             dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=batch_size)
-            evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+            evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(dev_dataloader),
+                dev_dataloader,
+                name="sts_dev",
+            )
 
             test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
             test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
-            test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
+            test_evaluator = _with_embedding_diagnostics(
+                EmbeddingSimilarityEvaluator(test_dataloader),
+                test_dataloader,
+                name="sts_test",
+            )
 
         train_objectives = [
             (mnrl_train_dataloader, mnrl_train_loss),
