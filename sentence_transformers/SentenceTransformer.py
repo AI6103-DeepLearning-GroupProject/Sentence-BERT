@@ -302,6 +302,7 @@ class SentenceTransformer(nn.Sequential):
         # Prepare optimizers
         optimizers = []
         schedulers = []
+        scheduler_name = scheduler
         for loss_model in loss_models:
             param_optimizer = list(loss_model.named_parameters())
             no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -314,7 +315,7 @@ class SentenceTransformer(nn.Sequential):
                 t_total = t_total // torch.distributed.get_world_size()
 
             optimizer = optimizer_class(optimizer_grouped_parameters, **optimizer_params)
-            scheduler = self._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps, t_total=t_total)
+            scheduler = self._get_scheduler(optimizer, scheduler=scheduler_name, warmup_steps=warmup_steps, t_total=t_total)
 
             optimizers.append(optimizer)
             schedulers.append(scheduler)

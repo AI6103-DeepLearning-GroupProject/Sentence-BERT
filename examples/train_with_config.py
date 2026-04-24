@@ -378,7 +378,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         test_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_test_file", "sts-test.csv")), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
         test_evaluator = EmbeddingSimilarityEvaluator(test_dataloader)
-        return train_dataloader, train_loss, evaluator, test_evaluator
+        return [(train_dataloader, train_loss)], evaluator, test_evaluator
 
     if task_type == "triplet":
         triplet_reader = TripletReader(
