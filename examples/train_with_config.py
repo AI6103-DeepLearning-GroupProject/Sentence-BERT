@@ -189,7 +189,7 @@ def _load_pair_examples(data_cfg: dict) -> List[InputExample]:
     text1_col_idx = data_cfg.get("text1_col_idx", 0)
     text2_col_idx = data_cfg.get("text2_col_idx", 1)
     hard_negative_col_idx = data_cfg.get("hard_negative_col_idx", 2)
-    use_hard_negative = data_cfg.get("use_hard_negative", True)
+    use_hard_negative = data_cfg.get("use_hard_negative", False)
     max_examples = data_cfg.get("max_examples", 0)
     drop_mirror_pairs = data_cfg.get("drop_mirror_pairs", True)
 
@@ -332,6 +332,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
 
     batch_size = training_cfg.get("batch_size", 16)
     task_type = task_cfg["type"]
+    logging.info("Build task components: task_type=%s, batch_size=%s", task_type, batch_size)
 
     if task_type == "nli_softmax":
         nli_reader = NLIDataReader(data_cfg["nli_path"])
@@ -371,11 +372,13 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         train_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_train_file", "sts-train.csv")), model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
         if task_type == "sts_cosent":
+            logging.info("Using CoSENTLoss with scale=%s", task_cfg.get("scale", 20.0))
             train_loss = losses.CoSENTLoss(
                 model=model,
                 scale=task_cfg.get("scale", 20.0),
             )
         else:
+            logging.info("Using CosineSimilarityLoss")
             train_loss = losses.CosineSimilarityLoss(model=model)
 
         dev_data = SentencesDataset(sts_reader.get_examples(data_cfg.get("sts_dev_file", "sts-dev.csv")), model=model)
@@ -418,6 +421,7 @@ def _build_task_components(config: dict, model: SentenceTransformer):
         pair_examples = _load_pair_examples(data_cfg)
         train_data = SentencesDataset(pair_examples, model=model)
         train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
+        logging.info("Using MultipleNegativesRankingLoss")
         train_loss = losses.MultipleNegativesRankingLoss(model)
 
         evaluator = None
@@ -601,6 +605,8 @@ def main():
         total_stages = len(runtime_plan["stages"])
         if args.start_stage < 1 or args.start_stage > total_stages:
             raise ValueError("--start-stage must be within [1, {}], got {}".format(total_stages, args.start_stage))
+        if args.start_stage > 1 and not args.resume_from:
+            raise ValueError("--resume-from is required when --start-stage is greater than 1")
         if args.start_stage > 1:
             logging.info("Skip first %d stage(s), start from stage %d/%d", args.start_stage - 1, args.start_stage, total_stages)
 
@@ -609,7 +615,13 @@ def main():
             stage_name = stage_cfg["name"]
             is_last_stage = (stage_idx == total_stages - 1)
 
-            logging.info("Start stage %d/%d: %s", stage_idx + 1, total_stages, stage_name)
+            logging.info(
+                "Start stage %d/%d: %s (task_type=%s)",
+                stage_idx + 1,
+                total_stages,
+                stage_name,
+                stage_cfg["task"].get("type"),
+            )
             train_objectives, evaluator, test_evaluator = _build_task_components(stage_cfg, model)
 
             stage_training_cfg = dict(stage_cfg["training"])

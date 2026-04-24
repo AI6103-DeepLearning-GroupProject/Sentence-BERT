@@ -1,0 +1,50 @@
+{
+  "model_name": "result/runtime_sbert_base_sts_nli_mnrl_cosent/model",
+  "evaluation_task": "sts",
+  "num_runs": 1,
+  "seed_start": 42,
+  "seed_step": 1,
+  "seeds": [
+    42
+  ],
+  "aggregate": {
+    "score_mean": 0.8574706447883688,
+    "score_std": 0.0,
+    "cosine_pearson_mean": 0.8372177,
+    "cosine_pearson_std": 0.0,
+    "cosine_spearman_mean": 0.8574706447883688,
+    "cosine_spearman_std": 0.0,
+    "dot_pearson_mean": 0.68168426,
+    "dot_pearson_std": 0.0,
+    "dot_spearman_mean": 0.6606300425902207,
+    "dot_spearman_std": 0.0,
+    "euclidean_pearson_mean": 0.85665065,
+    "euclidean_pearson_std": 0.0,
+    "euclidean_spearman_mean": 0.8571891112763742,
+    "euclidean_spearman_std": 0.0,
+    "manhattan_pearson_mean": 0.8557851,
+    "manhattan_pearson_std": 0.0,
+    "manhattan_spearman_mean": 0.8563540149188523,
+    "manhattan_spearman_std": 0.0
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "seed": 42,
+      "score": 0.8574706447883688,
+      "metrics": {
+        "cosine_pearson": 0.8372177,
+        "cosine_spearman": 0.8574706447883688,
+        "euclidean_pearson": 0.85665065,
+        "euclidean_spearman": 0.8571891112763742,
+        "manhattan_pearson": 0.8557851,
+        "manhattan_spearman": 0.8563540149188523,
+        "dot_pearson": 0.68168426,
+        "dot_spearman": 0.6606300425902207
+      }
+    }
+  ],
+  "main_similarity": "cosine",
+  "sts_path": "datasets/stsbenchmark",
+  "sts_test_file": "sts-test.csv"
+}

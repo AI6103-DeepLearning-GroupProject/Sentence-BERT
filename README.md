@@ -1,421 +1,388 @@
-# Sentence Transformers: Sentence Embeddings using BERT / RoBERTa / DistilBERT / ALBERT / XLNet with PyTorch
-BERT / XLNet produces out-of-the-box rather bad sentence embeddings. This repository fine-tunes BERT / RoBERTa / DistilBERT / ALBERT / XLNet with a siamese or triplet network structure to produce semantically meaningful sentence embeddings that can be used in unsupervised scenarios: Semantic textual similarity via cosine-similarity, clustering, semantic search.
+# Beyond SBERT 0.2.4
 
+This repository is an experimental fork of the original
+[`sentence-transformers`](https://github.com/huggingface/sentence-transformers) 0.2.4 codebase. It keeps the old SBERT training stack on 2019-era.
+(`transformers==2.2.1`, PyTorch, custom readers, and the original model
+serialization format), then adds a config-driven pipeline for reproducible
+STSBenchmark-focused experiments.
 
-We provide an increasing number of **state-of-the-art pretrained models** that can be used to derive sentence embeddings. See [Pretrained Models](#pretrained-models). Details of the implemented approaches can be found in our publication: [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) (EMNLP 2019).
+The main target is **STSBenchmark test-set Spearman correlation** with staged
+training over NLI, contrastive MNRL, and STS objectives.
 
+## What Changed From SBERT 0.2.4
 
-You can use this code to easily **train your own sentence embeddings**, that are tuned for your specific task. We provide various dataset readers and you can tune sentence embeddings with different loss function, depending on the structure of your dataset. For further details, see [Train your own Sentence Embeddings](#Training).
+- **Config-driven training**: `examples/train_with_config.py` reads
+  `examples/config.yaml` and supports both legacy experiments and staged runtime
+  experiments.
+- **Runtime experiment modes**: `sts`, `nli`, `nli_mnrl`, `sts_nli`,
+  `sts_nli_mnrl`, `sts_nli_mnrl_cosent`, `sts_nli_mnrl_aoe`,
+  `wikipedia_triplet`, and `wikipedia_triplet_mnrl`.
+- **Reproducibility controls**: explicit seed setting, deterministic cuDNN
+  toggles, centralized optimizer settings, fixed stage order, and multi-run
+  result aggregation.
+- **Improved MNRL**: `MultipleNegativesRankingLoss` now uses normalized cosine
+  scores with `scale=20.0`, matching the later sentence-transformers behavior
+  more closely than the original raw dot-product implementation.
+- **NLI hard negatives for MNRL**: `examples/datasets/build_contrastive_pairs.py`
+  builds triplets from AllNLI: premise as anchor, entailment as positive, and
+  contradiction as explicit hard negative.
+- **CoSENT STS objective**: `CoSENTLoss` is available as a stronger STS ranking
+  loss and is enabled only by `sts_nli_mnrl_cosent`.
+- **AoE experimental loss**: `AoECombinedLoss` is available for the
+  `sts_nli_mnrl_aoe` mode.
+- **Evaluation scripts**: STS, triplet, and SentEval evaluators write JSON/CSV
+  summaries under `result/`.
 
+Recent repository history reflects these additions, including MNRL hard-negative
+work, CoSENT experiments, AoE experiments, SentEval support, and Slurm
+reproduction scripts.
 
+## Repository Layout
 
-## Setup
-We recommend Python 3.6 or higher. The model is implemented with PyTorch (at least 1.0.1) using [transformers v2.2.1](https://github.com/huggingface/transformers).
-The code does **not** work with Python 2.7.
+| Path | Purpose |
+| --- | --- |
+| `config.yaml` | Top-level runtime configuration for Slurm train/eval jobs. |
+| `examples/config.yaml` | Full experiment definitions, model variants, data modes, and stage settings. |
+| `examples/train_with_config.py` | Main config-driven training entry point. |
+| `examples/evaluate_pretrained.py` | STSBenchmark evaluator for a local or remote SentenceTransformer model. |
+| `examples/evaluate_triplet_pretrained.py` | Triplet evaluator. |
+| `examples/evaluate_senteval.py` | SentEval transfer-task evaluator. |
+| `examples/datasets/get_data.py` | Downloads AllNLI, STSBenchmark, and Wikipedia triplets. |
+| `examples/datasets/build_contrastive_pairs.py` | Builds MNRL pairs or NLI hard-negative triplets. |
+| `sentence_transformers/losses/` | Softmax, cosine, MNRL, CoSENT, AoE, and triplet losses. |
+| `scripts/02_train_sbert.slurm` | Main train+eval Slurm job. |
+| `scripts/03_sts_eval.slurm` | Standalone STS evaluation Slurm job. |
+| `result/` | Reported JSON summaries and generated run artifacts. |
 
-**With pip**
+## Environment
 
-Install the model with `pip`:
-```
-pip install -U sentence-transformers
-```
+The code is based on the old SBERT 0.2.4 stack. Use the pinned dependency set
+instead of a modern sentence-transformers install.
 
-**From source**
-
-Clone this repository and install it with `pip`:
-````
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 pip install -e .
-```` 
-
-
-
-## Getting Started
-
-### Sentences Embedding with a Pretrained Model
-[This example](examples/basic_embedding.py) shows you how to use an already trained Sentence Transformer model to embed sentences for another task.
-
-First download a pretrained model.
-````
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('bert-base-nli-mean-tokens')
-````
-Then provide some sentences to the model.
-````
-sentences = ['This framework generates embeddings for each input sentence',
-    'Sentences are passed as a list of string.', 
-    'The quick brown fox jumps over the lazy dog.']
-sentence_embeddings = model.encode(sentences)
-````
-And that's it already. We now have a list of numpy arrays with the embeddings.
-````
-for sentence, embedding in zip(sentences, sentence_embeddings):
-    print("Sentence:", sentence)
-    print("Embedding:", embedding)
-    print("")
-````
-
-## Training
-This framework allows you to fine-tune your own sentence embedding methods, so that you get task-specific sentence embeddings. You have various options to choose from in order to get perfect sentence embeddings for your specific task. 
-
-### Dataset Download
-First, you should download some datasets. For this run the [examples/datasets/get_data.py](examples/datasets/get_data.py):
 ```
+
+Dependencies are defined in `requirements.txt`:
+
+```text
+transformers==2.2.1
+torch>=1.0.1
+tqdm
+numpy
+scikit-learn
+scipy
+nltk
+PyYAML
+```
+
+For cluster runs, the provided Slurm scripts assume a virtual environment at
+`$HOME/venvs/sbert024` unless `VENV_DIR` is overridden.
+
+## Data Setup
+
+Download the datasets:
+
+```bash
 python examples/datasets/get_data.py
 ```
 
-It will download some [datasets](examples/datasets) and store them on your disk.
+This creates datasets under `examples/datasets/`. The Slurm scripts also try to
+sync or normalize dataset locations into:
 
-### Reproducible Training with `config.yaml`
-For reproducible runs with centralized parameter management, you can use:
-```
-python examples/train_with_config.py --experiment sts_bert --config examples/config.yaml
-```
-
-The default configuration file [examples/config.yaml](examples/config.yaml) includes baseline-compatible experiments (`nli_bert`, `sts_bert`, `sts_continue_training_bert`, `wikipedia_triplet_bert`) and a fixed random seed.
-
-
-### Model Training from Scratch
-[examples/training_nli_bert.py](examples/training_nli_bert.py) fine-tunes BERT from the pre-trained model as provided by Google. It tunes the model on Natural Language Inference (NLI) data. Given two sentences, the model should classify if these two sentence entail, contradict, or are neutral to each other. For this, the two sentences are passed to a transformer model to generate fixed-sized sentence embeddings. These sentence embeddings are then passed to a softmax classifier to derive the final label (entail, contradict, neutral). This generates sentence embeddings that are useful also for other tasks like clustering or semantic textual similarity.
-
-
-First, we define a sequential model of how a sentence is mapped to a fixed size sentence embedding:
-```
-# Use BERT for mapping tokens to embeddings
-word_embedding_model = models.BERT('bert-base-uncased')
-
-# Apply mean pooling to get one fixed sized sentence vector
-pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
-                               pooling_mode_mean_tokens=True,
-                               pooling_mode_cls_token=False,
-                               pooling_mode_max_tokens=False)
-
-model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+```text
+datasets/AllNLI/
+datasets/stsbenchmark/
+datasets/wikipedia-sections-triplets/
 ```
 
-First, we use the BERT model (instantiated from bert-base-uncased) to map tokens in a sentence to the output embeddings from BERT. The next layer in our model is a Pooling model: In that case, we perform mean-pooling. You can also perform max-pooling or use the embedding from the CLS token. You can also combine multiple poolings together.
+Expected STS files:
 
-These two modules (word_embedding_model and pooling_model) form our SentenceTransformer. Each sentence is now passed first through the word_embedding_model and then through the pooling_model to give fixed sized sentence vectors.
-
-
-Next, we specify a train dataloader:
-```
-nli_reader = NLIDataReader('datasets/AllNLI')
-
-train_data = SentencesDataset(nli_reader.get_examples('train.gz'), model=model)
-train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
-train_loss = losses.SoftmaxLoss(model=model, sentence_embedding_dimension=model.get_sentence_embedding_dimension(), num_labels=train_num_labels)
+```text
+datasets/stsbenchmark/sts-train.csv
+datasets/stsbenchmark/sts-dev.csv
+datasets/stsbenchmark/sts-test.csv
 ```
 
-The `NLIDataReader` reads the AllNLI dataset and we generate a dataloader that is suitable for training the Sentence Transformer model. As training loss, we use a Softmax Classifier.
+Expected AllNLI files:
 
-Next, we also specify a dev-set. The dev-set is used to evaluate the sentence embedding model on some unseen data. Note, the dev-set can be any data, in this case, we evaluate on the dev-set of the STS benchmark dataset.  The `evaluator` computes the performance metric, in this case, the cosine-similarity between sentence embeddings are computed and the Spearman-correlation to the gold scores is computed.
-
-```
-sts_reader = STSDataReader('datasets/stsbenchmark')
-dev_data = SentencesDataset(examples=sts_reader.get_examples('sts-dev.csv'), model=model)
-dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=train_batch_size)
-evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+```text
+datasets/AllNLI/s1.train.gz
+datasets/AllNLI/s2.train.gz
+datasets/AllNLI/labels.train.gz
 ```
 
- The training then looks like this:
- ```
-model.fit(train_objectives=[(train_dataloader, train_loss)],
-          evaluator=evaluator,
-          epochs=num_epochs,
-          evaluation_steps=1000,
-          warmup_steps=warmup_steps,
-          output_path=model_save_path
-          )
+For MNRL modes, the training script can auto-build:
+
+```text
+datasets/contrastive/pairs_train.tsv
+datasets/contrastive/nli_pairs_train.tsv
 ```
 
+Hard-negative MNRL files should have **three tab-separated columns**:
 
-
-### Continue Training on Other Data
-[examples/training_stsbenchmark_continue_training.py](examples/training_stsbenchmark_continue_training.py) shows an example where training on a fine-tuned model is continued. In that example, we use a sentence transformer model that was first fine-tuned on the NLI dataset and then continue training on the training data from the STS benchmark.
-
-First, we load a pre-trained model from the server:
-```
-model = SentenceTransformer('bert-base-nli-mean-tokens')
+```text
+anchor    positive_entailment    hard_negative_contradiction
 ```
 
+Check the format with:
 
-The next steps are as before. We specify training and dev data:
-```
-sts_reader = STSDataReader('datasets/stsbenchmark', normalize_scores=True)
-train_data = SentencesDataset(sts_reader.get_examples('sts-train.csv'), model)
-train_dataloader = DataLoader(train_data, shuffle=True, batch_size=train_batch_size)
-train_loss = losses.CosineSimilarityLoss(model=model)
-
-dev_data = SentencesDataset(examples=sts_reader.get_examples('sts-dev.csv'), model=model)
-dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=train_batch_size)
-evaluator = EmbeddingSimilarityEvaluator(dev_dataloader)
+```bash
+awk -F '\t' 'NR==1{print NF; exit}' datasets/contrastive/pairs_train.tsv
 ```
 
-In that example, we use CosineSimilarityLoss, which computes the cosine similarity between two sentences and compares this score with a provided gold similarity score.
+Expected output for hard-negative MNRL modes is `3`.
 
-Then we can train as before:
-```
-model.fit(train_objectives=[(train_dataloader, train_loss)],
-          evaluator=evaluator,
-          epochs=num_epochs,
-          evaluation_steps=1000,
-          warmup_steps=warmup_steps,
-          output_path=model_save_path)
-```
+## Configuration
 
+### Top-Level Runtime Config
 
-## Load Models
-Loading trained models is easy. You can specify a path:
-```
-model = SentenceTransformer('./my/path/to/model/')
-```
-Note: It is important that a / or \ is the path, otherwise, it is not recognized as a path.
+`config.yaml` controls Slurm-oriented runs:
 
-You can also host the training output on a server and download it:
- ```
-model = SentenceTransformer('http://www.server.com/path/to/model/my_model.zip')
-```
-With the first call, the model is downloaded and stored in the local torch cache-folder (`~/.cache/torch/sentence_transformers`). In order to work, you must zip all files and subfolders of your model. 
-
-We also provide several pre-trained models, that can be loaded by just passing a name:
-
- ```
-model = SentenceTransformer('bert-base-nli-mean-tokens')
+```yaml
+slurm:
+  train:
+    config_path: examples/config.yaml
+    experiment: runtime
+    model_variant: sbert_base
+    data_mode: sts_nli_mnrl_cosent
+    epochs: 4
+    seed: 42
+    num_runs: 1
+    seed_step: 1
+    resume_stage: 1
+    result_dir: ""
+  eval:
+    task_type: sts
+    model_name: result/runtime_sbert_base_sts_nli_mnrl_cosent/model
+    sts_path: datasets/stsbenchmark
+    sts_test_file: sts-test.csv
+    batch_size: 64
+    main_similarity: cosine
 ```
 
-This downloads the `bert-base-nli-mean-tokens` from our server and stores it locally.
+> Why 42? Go ask Douglas Adams. What we know is that this numbers answers the Ultimate Question of Universe, just like AI networks we're training.
 
-## Pretrained Models
-We provide the following models. You can use them in the following way:
- ```
-model = SentenceTransformer('name_of_model')
+### Model Variants
+
+Runtime model variants are defined in `examples/config.yaml`:
+
+| Key | Encoder | Base Model | Pooling |
+| --- | --- | --- | --- |
+| `sbert_base` | BERT | `bert-base-uncased` | mean pooling |
+| `sbert_large` | BERT | `bert-large-uncased` | mean pooling |
+| `sroberta_base` | RoBERTa | `roberta-base` | mean pooling |
+| `sroberta_large` | RoBERTa | `roberta-large` | mean pooling |
+
+> We focused on SBERT-base mainly
+
+### Runtime Data Modes
+
+| Mode | Stages | Main Use |
+| --- | --- | --- |
+| `sts` | STS cosine | STS-only baseline. |
+| `nli` | NLI softmax | NLI sentence embedding baseline. |
+| `nli_mnrl` | NLI softmax → hard-negative MNRL | Contrastive NLI-only variant. |
+| `sts_nli` | NLI softmax → STS cosine | Original SBERT-style NLI then STS. |
+| `sts_nli_mnrl` | NLI softmax → hard-negative MNRL → STS cosine | Main MNRL-enhanced STS mode. |
+| `sts_nli_mnrl_cosent` | NLI softmax → hard-negative MNRL → STS CoSENT | Main CoSENT STS ranking mode. |
+| `sts_nli_mnrl_aoe` | NLI softmax → MNRL/AoE joint → STS cosine | Experimental AoE mode. |
+| `wikipedia_triplet` | Wikipedia triplet | Topic triplet baseline. |
+| `wikipedia_triplet_mnrl` | Wikipedia MNRL → Wikipedia triplet | Wikipedia contrastive variant. |
+
+> Only `sts_nli_mnrl_cosent` replaces the final STS loss with CoSENT. Other modes
+keep their existing losses.
+
+## Reproducible Local Runs
+
+### Train the Current Default Mode
+
+> If you get access to TC2 HPC, simply submit the 01 and 02 Slurm scripts with runtime config at `config.yaml`. Output path for model, summary and logs can be found under results/ in the server. For local runs, use the command below.
+
+```bash
+python examples/train_with_config.py \
+  --config examples/config.yaml \
+  --experiment runtime \
+  --model-variant sbert_base \
+  --data-mode sts_nli_mnrl \
+  --seed 42 \
+  --epochs 4 \
+  --output-path result/runtime_sbert_base_sts_nli_mnrl_cosent/model
 ```
 
-The list is increasing as soon as new models increasing.
+Important details:
 
-### Sentence Embeddings using BERT
-BERT Sentence Embeddings have been extensively tested and tuned. We released the following pre-trained models for your usage:
+- Runtime stage-specific `num_epochs` overrides `--epochs`.
+- For `sts_nli_mnrl_cosent`, the actual stage epochs are `1` NLI, `2` MNRL,
+  and `1` STS CoSENT.
+- `save_best_model=true` saves the best model according to the dev evaluator in
+  the final stage.
+- If `use_hard_negative: true` is configured but the contrastive TSV has only
+  two columns, training fails instead of silently falling back to normal MNRL.
 
-**Trained on NLI data**
+### Evaluate STSBenchmark
 
-These models were trained on SNLI and MultiNLI dataset to create universal sentence embeddings. For more details, see: [nli-models.md](docs/pretrained-models/nli-models.md).
-- **bert-base-nli-mean-tokens**: BERT-base model with mean-tokens pooling. Performance: STSbenchmark: 77.12
-- **bert-base-nli-max-tokens**: BERT-base with max-tokens pooling. Performance: STSbenchmark: 77.18
-- **bert-base-nli-cls-token**: BERT-base with cls token pooling. Performance: STSbenchmark: 76.30
-- **bert-large-nli-mean-tokens**: BERT-large with mean-tokens pooling. Performance: STSbenchmark: 79.19
-- **bert-large-nli-max-tokens**: BERT-large with max-tokens pooling. Performance: STSbenchmark: 78.32
-- **bert-large-nli-cls-token**: BERT-large with CLS token pooling. Performance: STSbenchmark: 78.29
-- **roberta-base-nli-mean-tokens**: RoBERTa-base with mean-tokens pooling. Performance: STSbenchmark: 77.42
-- **roberta-large-nli-mean-tokens**: RoBERTa-base with mean-tokens pooling. Performance: STSbenchmark: 78.58
-- **distilbert-base-nli-mean-tokens**: DistilBERT-base with mean-tokens pooling. Performance: STSbenchmark: 76.97
-
-
-**Trained on STS data**
-
-These models were first fine-tuned on the AllNLI datasent, then on train set of STS benchmark. They are specifically well suited for semantic textual similarity. For more details, see: [sts-models.md](docs/pretrained-models/sts-models.md).
-- **bert-base-nli-stsb-mean-tokens**: Performance: STSbenchmark: 85.14
-- **bert-large-nli-stsb-mean-tokens**: Performance: STSbenchmark: 85.29
-- **roberta-base-nli-stsb-mean-tokens**: Performance: STSbenchmark: 85.40
-- **roberta-large-nli-stsb-mean-tokens**: Performance: STSbenchmark: 86.31
-- **distilbert-base-nli-stsb-mean-tokens**: Performance: STSbenchmark: 84.38
-
-
-**Trained on Wikipedia Sections Triplets**
-
-These models were fine-tuned on triplets generated from Wikipedia sections. These models work well if fine-grained clustering of sentences on a similar topic is required. For more details, see: [wikipedia-sections-models.md](docs/pretrained-models/wikipedia-sections-models.md).
-- **bert-base-wikipedia-sections-mean-tokens**: 80.42% accuracy on Wikipedia sections test set.
-
-
-### Sentence Embeddings using RoBERTa
-RoBERTa is ready to be used for training sentence embeddings. See [training_nli_roberta.py](examples/training_nli_roberta.py) and [training_stsbenchmark_roberta.py](examples/training_stsbenchmark_roberta.py) for examples how to train RoBERTa to yield sentence embeddings.
-
-Pre-trained models are currently trained and will be uploaded soon.
-
-
-### Sentence Embeddings using XLNet
-Currently, the XLNet model is under development. Currently, it produces worse results than the BERT models, hence, we not yet release pre-trained models for XLNet.
-
-As soon as we have fine-tuned the hyperparameters of XLNet to generate well working sentence embeddings, new pre-trained models will be released.
-
-
-## Performance
-
-Extensive evaluation is currently undergoing, but here we provide some preliminary results.
-
-| Model    | STS benchmark | SentEval  |
-| ----------------------------------|:-----: |:---:   |
-| Avg. GloVe embeddings             | 58.02  | 81.52  |
-| BERT-as-a-service avg. embeddings | 46.35  | 84.04  |
-| BERT-as-a-service CLS-vector      | 16.50  | 84.66  |
-| InferSent - GloVe                 | 68.03  | 85.59  |
-| Universal Sentence Encoder        | 74.92  | 85.10  |
-|**Sentence Transformer Models**    ||
-| bert-base-nli-mean-tokens         | 77.12  | 86.37 |
-| bert-large-nli-mean-tokens        | 79.19  | 87.78 |
-| bert-base-nli-stsb-mean-tokens    | 85.14  | 86.07 |
-| bert-large-nli-stsb-mean-tokens   | 85.29 | 86.66|
-
-
-## Loss Functions
-We implemented various loss-functions that allow training of sentence embeddings from various datasets. These loss-functions are in the package `sentence_transformers.losses`.
- 
-- *SoftmaxLoss*: Given the sentence embeddings of two sentences, trains a softmax-classifier. Useful for training on datasets like NLI.
-- *CosineSimilarityLoss*: Given a sentence pair and a gold similarity score (either between -1 and 1 or between 0 and 1), computes the cosine similarity between the sentence embeddings and minimizes the mean squared error loss.
-- *TripletLoss*: Given a triplet (anchor, positive example, negative example), minimizes the [triplet loss](https://en.wikipedia.org/wiki/Triplet_loss).
-- *BatchHardTripletLoss*: Implements the *batch hard triplet loss* from the paper [In Defense of the Triplet Loss for Person Re-Identification](https://arxiv.org/abs/1703.07737). Each batch must contain multiple examples from the same class. The loss optimizes then the distance between the most-distance positive pair and the closest negative-pair.
-- *MultipleNegativesRankingLoss*: Each batch has one positive pair, all other pairs are treated as negative examples. The loss was used in the papers [Efficient Natural Language Response Suggestion for Smart Reply](https://arxiv.org/pdf/1705.00652.pdf) and [Learning Cross-Lingual Sentence Representations via a Multi-task Dual-Encoder Model](https://arxiv.org/pdf/1810.12836.pdf).
-
-## Models
-This framework implements various modules, that can be used sequentially to map a sentence to a sentence embedding. The different modules can be found in the package `sentence_transformers.models`. Each pipeline consists of the following modules.
-
-
-**Word Embeddings:** These models map tokens to token embeddings.
-- **[BERT](sentence_transformers/models/BERT.py)**: Uses pytorch-transformers BERT model to map tokens to vectors. Example:  [examples/training_nli_bert.py](examples/training_nli_bert.py) / [examples/training_stsbenchmark_bert.py](examples/training_stsbenchmark_bert.py)
-- **[RoBERTa](sentence_transformers/models/RoBERTa.py)**: Uses pytorch-transformers RoBERTa model to map tokens to vectors. Example:  [examples/training_nli_roberta.py](examples/training_nli_roberta.py) / [examples/training_stsbenchmark_roberta.py](examples/training_stsbenchmark_roberta.py)
-- **[DistilBERT](sentence_transformers/models/DistilBERT.py)**: DistilBERT is a small, fast, cheap and light model based on BERT. Example:  [examples/training_nli_distilbert.py](examples/training_nli_distilbert.py) / [examples/training_stsbenchmark_distilbert.py](examples/training_stsbenchmark_distilbert.py)
-- **[ALBERT](sentence_transformers/models/ALBERT.py)**: Based on [ALBERT](https://arxiv.org/abs/1909.11942). Currently, ALBERT has some bugs in transformer==2.2.1, which should be fixed with the next version. Example:  [examples/training_nli_albert.py](examples/training_nli_albert.py) / [examples/training_stsbenchmark_albert.py](examples/training_stsbenchmark_albert.py)
-- **[XLNet](sentence_transformers/models/XLNet.py)**: Uses pytorch-transformers XLNet model to map tokens to vectors. Example: [examples/training_stsbenchmark_xlnet.py](examples/training_stsbenchmark_xlnet.py)
-- **[WordEmbeddings](sentence_transformers/models/WordEmbeddings.py)**: Uses traditional word embeddings like word2vec or GloVe to map tokens to vectors. Example: [examples/training_stsbenchmark_avg_word_embeddings.py](examples/training_stsbenchmark_avg_word_embeddings.py)
-
-**Embedding Transformations:** These models transform token embeddings in some way
-- **[LSTM](sentence_transformers/models/LSTM.py)**: Runs a bidirectional LSTM. Example: [examples/training_stsbenchmark_bilstm.py](examples/training_stsbenchmark_bilstm.py).
-- **[CNN](sentence_transformers/models/CNN.py)**: Runs a CNN model with multiple kernel sizes. Example: [examples/training_stsbenchmark_cnn.py](examples/training_stsbenchmark_cnn.py).
-- **[WordWeights](sentence_transformers/models/WordWeights.py)**: This model can be used after WordEmbeddings and before Pooling to apply a weighting to the token embeddings, for example, a tf-idf weighting. Example: [examples/training_stsbenchmark_tf-idf_word_embeddings.py](examples/training_stsbenchmark_tf-idf_word_embeddings.py).
-- **[Pooling](sentence_transformers/models/Pooling.py)**: After tokens are mapped to embeddings, we apply the pooling, where you can compute a mean/max-pooling or use the CLS-token embedding (for BERT and XLNet). You can also combine multiple poolings.
-
-**Sentence Embeddings Models:** These models map a sentence directly to a fixed size sentence embedding:
-- **[BoW](sentence_transformers/models/BoW.py)**: Computes a fixed size bag-of-words (BoW) representation of the input text. Can be initialized with IDF-values to create a tf-idf vector. Note that this model is not trainable. Example: [examples/training_stsbenchmark_bow.py](examples/training_stsbenchmark_bow.py)
-
-
-**Sentence Embeddings Transformations:** These models can be added once we have a fixed size sentence embedding.
-- **[Dense](sentence_transformers/models/Pooling.py)**: A fully-connected feed-forward network to create a Deep Averaging Network (DAN). You can stack multiple Dense models. Example: [examples/training_stsbenchmark_avg_word_embeddings.py](examples/training_stsbenchmark_avg_word_embeddings.py)
-
-
-
-## Multitask Training
-This code allows multi-task learning with training data from different datasets and with different loss-functions. More documentation will follow soon.
-
-
-## Application Examples
-We present some examples, how the generated sentence embeddings can be used for downstream applications.
-
-### Semantic Search
-Semantic search is the task of finding similar sentences to a given sentence. See [examples/application_semantic_search.py](examples/application_semantic_search.py).
-
-We first generate an embedding for all sentences in a corpus:
-```
-embedder = SentenceTransformer('bert-base-nli-mean-tokens')
-
-# Corpus with example sentences
-corpus = ['A man is eating a food.',
-          'A man is eating a piece of bread.',
-          'The girl is carrying a baby.',
-          'A man is riding a horse.',
-          'A woman is playing violin.',
-          'Two men pushed carts through the woods.',
-          'A man is riding a white horse on an enclosed ground.',
-          'A monkey is playing drums.',
-          'A cheetah is running behind its prey.']
-
-corpus_embeddings = embedder.encode(corpus)
+```bash
+python examples/evaluate_pretrained.py \
+  --model-name result/runtime_sbert_base_sts_nli_mnrl_cosent/model \
+  --sts-path datasets/stsbenchmark \
+  --sts-test-file sts-test.csv \
+  --batch-size 64 \
+  --seed 42 \
+  --num-runs 1 \
+  --main-similarity cosine \
+  --output-path result/eval_runtime_sbert_base_sts_nli_mnrl_cosent
 ```
 
-Then, we generate the embeddings for different query sentences:
-```
-queries = ['A man is eating pasta.', 'Someone in a gorilla costume is playing a set of drums.', 'A cheetah chases prey on across a field.']
-query_embeddings = embedder.encode(queries)
-```
+The evaluator writes:
 
-We then use scipy to find the most-similar embeddings for queries in the corpus:
-```
-for query, query_embedding in zip(queries, query_embeddings):
-    distances = scipy.spatial.distance.cdist([query_embedding], corpus_embeddings, "cosine")[0]
+```text
+result/eval_runtime_sbert_base_sts_nli_mnrl_cosent/summary.json
+result/eval_runtime_sbert_base_sts_nli_mnrl_cosent/summary_table.csv
 ```
 
-The output looks like this:
-```
-Query: A man is eating pasta.
-Top 5 most similar sentences in corpus:
-A man is eating a piece of bread. (Score: 0.8518)
-A man is eating a food. (Score: 0.8020)
-A monkey is playing drums. (Score: 0.4167)
-A man is riding a horse. (Score: 0.2621)
-A man is riding a white horse on an enclosed ground. (Score: 0.2379)
+The primary STS metric is cosine Spearman correlation.
 
+## Reproducible Slurm Runs
 
-Query: Someone in a gorilla costume is playing a set of drums.
-Top 5 most similar sentences in corpus:
-A monkey is playing drums. (Score: 0.8514)
-A man is eating a piece of bread. (Score: 0.3671)
-A man is eating a food. (Score: 0.3559)
-A man is riding a horse. (Score: 0.3153)
-The girl is carrying a baby. (Score: 0.2589)
+### Main Train + Eval Job
 
+Edit `config.yaml`, then submit:
 
-Query: A cheetah chases prey on across a field.
-Top 5 most similar sentences in corpus:
-A cheetah is running behind its prey. (Score: 0.9073)
-Two men pushed carts through the woods. (Score: 0.3896)
-A man is riding a horse. (Score: 0.3789)
-A man is riding a white horse on an enclosed ground. (Score: 0.3544)
-A monkey is playing drums. (Score: 0.3435)
-
+```bash
+sbatch scripts/02_train_sbert.slurm
 ```
 
+The job reads:
 
-### Clustering
-[examples/application_clustering.py](examples/application_clustering.py) depicts an example to cluster similar sentences based on their sentence embedding similarity.
+- `slurm.train.*` for training.
+- `slurm.eval.*` for evaluation.
 
-As before, we first compute an embedding for each sentence:
-```
-embedder = SentenceTransformer('bert-base-nli-mean-tokens')
+By default, artifacts are written to:
 
-# Corpus with example sentences
-corpus = ['A man is eating a food.',
-          'A man is eating a piece of bread.',
-          'A man is eating pasta.',
-          'The girl is carrying a baby.',
-          'The baby is carried by the woman',
-          'A man is riding a horse.',
-          'A man is riding a white horse on an enclosed ground.',
-          'A monkey is playing drums.',
-          'Someone in a gorilla costume is playing a set of drums.',
-          'A cheetah is running behind its prey.',
-          'A cheetah chases prey on across a field.']
-
-corpus_embeddings = embedder.encode(corpus)
+```text
+result/runtime_<model_variant>_<data_mode>/
+result/runtime_<model_variant>_<data_mode>/model/
+result/runtime_<model_variant>_<data_mode>/summary.json
+result/runtime_<model_variant>_<data_mode>/summary_table.csv
+result/logs/
 ```
 
-Then, we perform k-means clustering using scipy:
-```
-# Perform kmean clustering
-num_clusters = 5
-whitened_corpus = scipy.cluster.vq.whiten(corpus_embeddings)
-code_book, _ = scipy.cluster.vq.kmeans(whitened_corpus, num_clusters)
-cluster_assignment, _ = scipy.cluster.vq.vq(whitened_corpus, code_book)
+For the current default mode:
+
+```text
+result/runtime_sbert_base_sts_nli_mnrl_cosent/
 ```
 
-The output looks like this:
-```
-Cluster  1
-['A man is riding a horse.', 'A man is riding a white horse on an enclosed ground.']
+### Standalone STS Evaluation
 
-Cluster  2
-['A man is eating a food.', 'A man is eating a piece of bread.', 'A man is eating pasta.']
-
-Cluster  3
-['A monkey is playing drums.', 'Someone in a gorilla costume is playing a set of drums.']
-
-Cluster  4
-['The girl is carrying a baby.', 'The baby is carried by the woman']
-
-Cluster  5
-['A cheetah is running behind its prey.', 'A cheetah chases prey on across a field.']
+```bash
+sbatch scripts/03_sts_eval.slurm
 ```
 
-## Citing & Authors
-If you find this repository helpful, feel free to cite our publication [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084):
-``` 
+Override a model path if needed:
+
+```bash
+MODEL_NAME=result/runtime_sbert_base_sts_nli_mnrl_cosent/model \
+sbatch scripts/03_sts_eval.slurm
+```
+
+### Multi-Run Reproduction
+
+Set `num_runs` and `seed_step` in `config.yaml`:
+
+```yaml
+slurm:
+  train:
+    seed: 42
+    num_runs: 3
+    seed_step: 1
+```
+
+This produces runs with seeds `42`, `43`, and `44`, then aggregates the mean and
+standard deviation in `summary.json`.
+
+## Reported Result Files
+
+Existing JSON summaries are stored in `result/`. They are treated as run outputs,
+not as source-of-truth configuration. Example files include:
+
+| File | Task |
+| --- | --- |
+| `result/sbert-base-sts.json` | STS baseline. |
+| `result/sbert-base-sts-nli.json` | NLI + STS. |
+| `result/sbert-base-sts-nli-mnrl.json` | NLI + hard-negative MNRL + STS. |
+| `result/sbert-base-nli-mnrl-cosent.json` | NLI + hard-negative MNRL + STS CoSENT. |
+| `result/sbert-base-sts-nli-mnrl-aoe.json` | AoE experimental mode. |
+| `result/sbert-base-nli-senteval.json` | SentEval NLI baseline. |
+| `result/sbert-base-nli-mnrl-senteval.json` | SentEval NLI + MNRL. |
+
+When comparing results, verify:
+
+- Same `data_mode`.
+- Same model variant.
+- Same seed list.
+- Same STS test file.
+- Same `main_similarity`.
+- Whether the MNRL TSV has two columns or three columns.
+
+## Implementation Notes
+
+### Staged Training
+
+`examples/train_with_config.py` resolves runtime plans from
+`examples/config.yaml`. Each stage creates its own dataloader, loss, evaluator,
+and training configuration. The same model object is carried across stages.
+
+### MNRL With Hard Negatives
+
+`MultipleNegativesRankingLoss` accepts either:
+
+- two texts per example: `anchor, positive`; or
+- three or more texts per example: `anchor, positive, hard_negative...`.
+
+The loss normalizes embeddings, computes scaled cosine scores, appends explicit
+hard negatives to the in-batch candidate matrix, and uses cross entropy where the
+positive target remains the diagonal item in the first candidate block.
+
+### CoSENT
+
+`CoSENTLoss` is a pairwise ranking loss over STS labels. It compares score
+differences between sentence pairs inside a batch and is used by the
+`sts_cosent` task type. The current scale is `20.0`.
+
+### Determinism
+
+`sentence_transformers/util.py` sets:
+
+- Python random seed.
+- NumPy random seed.
+- PyTorch CPU and CUDA seeds.
+- cuDNN deterministic and benchmark flags.
+
+The default seed is `42`.
+
+## Common Failure Modes
+
+- **Old two-column MNRL cache**: delete `datasets/contrastive/pairs_train.tsv`
+  and rerun the Slurm job, or ensure the first row has three columns.
+- **Wrong mode evaluated**: check `config.yaml` `slurm.eval.model_name`; it must
+  match the trained `slurm.train.data_mode`.
+- **Resume skipped a new stage**: set `resume_stage: 1` when comparing methods
+  from scratch.
+- **Missing local model path**: evaluation treats `result/.../model` as a local
+  directory and fails if it does not exist.
+- **Dataset path mismatch**: make sure STS files exist under
+  `datasets/stsbenchmark/`.
+
+## Citation
+
+This fork builds on Sentence-BERT:
+
+```bibtex
 @inproceedings{reimers-2019-sentence-bert,
     title = "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks",
     author = "Reimers, Nils and Gurevych, Iryna",
@@ -426,23 +393,3 @@ If you find this repository helpful, feel free to cite our publication [Sentence
     url = "http://arxiv.org/abs/1908.10084",
 }
 ```
-
-
-The main contributors of this repository are:
-- [Nils Reimers](https://github.com/nreimers)
-- [Gregor Geigle](https://github.com/aaronsom)
-
-Contact person: Nils Reimers, Rnils@web.de
-
-https://www.ukp.tu-darmstadt.de/
-
-
-Don't hesitate to send us an e-mail or report an issue, if something is broken (and it shouldn't be) or if you have further questions.
-
-> This repository contains experimental software and is published for the sole purpose of giving additional background details on the respective publication.
-
-
-
-
-
-
