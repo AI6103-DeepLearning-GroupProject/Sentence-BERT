@@ -3,5 +3,6 @@ from .CoSENTLoss import *
 from .SoftmaxLoss import *
 from .BatchHardTripletLoss import *
 from .MultipleNegativesRankingLoss import *
+from .MultipleNegativesRankingUniRegLoss import *
 from .TripletLoss import *
 from .AoECombinedLoss import *
