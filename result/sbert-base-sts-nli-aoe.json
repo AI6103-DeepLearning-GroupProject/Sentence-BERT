@@ -1,0 +1,15 @@
+{
+    "model_name": "result/runtime_sbert_base_sts_nli_aoe/model",
+    "evaluation_task": "sts",
+    "metric": "cosine_spearman",
+    "seeds": {
+        "42": 0.868616,
+        "43": 0.867703,
+        "44": 0.863409
+    },
+    "mean": 0.866576,
+    "std": 0.002780,
+    "main_similarity": "cosine",
+    "sts_path": "datasets/stsbenchmark",
+    "sts_test_file": "sts-test.csv"
+}

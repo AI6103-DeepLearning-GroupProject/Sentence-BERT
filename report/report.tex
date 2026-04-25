@@ -65,19 +65,20 @@
 \setcounter{secnumdepth}{1}
 
 % Title should use Title Case.
-\title{AI6103 - Deep Learning Group Project Report}
+\title{\huge AI6103 - Deep Learning Group Project Report \\ \Large Revisiting Sentence-BERT: Reproduce and Lightweight Enhancements}
 
-\author{Zhang Yanhai}
-
-\author{Anonymous Author}
-
-\author{Anonymous Author}
-
-\author{Anonymous Author}
-
-\author{Anonymous Author}
-
-\author{Anonymous Author}
+\author{
+\begin{tabular}{ccc}
+\textbf{Dai Ziqiao} & \textbf{Dai Dongjie} & \textbf{Li Huilin} \\
+G1234567A & G1234567A & G1234567A \\[1em]
+\multicolumn{3}{c}{
+\begin{tabular}{cc}
+\textbf{Li Zian} & \textbf{Zhang Yanhai} \\
+G1234567A & G2509626L
+\end{tabular}
+}
+\end{tabular}
+}
 
 \affiliations{
     Nanyang Technological University
@@ -131,105 +132,206 @@ We use a legacy Sentence-BERT repository aligned with sentence-transformers v0.2
 All experiments are executed using Single GPU NVIDIA L40S.
 
 \textbf{Dataset protocol.}
-The current evaluation target is STSBenchmark test split (\texttt{sts-test.csv}).
+For STSBenchmark, we strictly follow the standard split protocol:
+\texttt{sts-train.csv} is used for training, \texttt{sts-dev.csv} for model selection, and
+\texttt{sts-test.csv} only for final reporting. This separation is preserved in all runtime modes,
+so the final cosine Spearman numbers are evaluated without data leakage from the test split.
 Training/evaluation scripts are configured to normalize expected dataset paths and optionally auto-download
 required files when missing.
 
 \textbf{Metrics.}
-We report Pearson and Spearman correlations under cosine, Manhattan, Euclidean, and dot-product similarities.
+We report Cosine Spearman correlations under similarities, as this is the one used and promoted in the original SBERT work.
 For multi-seed evaluation, we aggregate mean and standard deviation over repeated runs.
 
 \section{Methodology}
-The current baseline pipeline follows the pretrained SBERT-style model evaluation protocol.
-Given a model checkpoint (or model identifier), we encode sentence pairs from STSBenchmark and compute similarity scores.
-The evaluator then reports correlation with gold STS labels.
+Our goal is to improve the original SBERT recipe without breaking compatibility with the 2019
+\texttt{sentence-transformers} training stack. All reported best runs used the \texttt{bert-base-uncased} 
+with mean pooling and maximum sequence length 128,
+while the training curriculum is switched through \texttt{config.yaml}. 
+The common backbone of all experiments is a three-stage view of sentence embedding learning:
+\begin{equation}
+\mathbf{h}(x)=\operatorname{MeanPool}(\operatorname{BERT}(x))
+\end{equation}
+We first warm-start the encoder on NLI, then optionally reshape the embedding geometry with an
+intermediate objective, and finally adapt to STS with direct similarity supervision.
 
-Our runtime framework already supports configurable combinations of:
-\begin{itemize}
-    \item Model variant: SBERT-base / SBERT-large / SRoBERTa-base / SRoBERTa-large.
-    \item Data mode: STS-only, NLI-only, STS+NLI, and STS+NLI+MNRL staged training.
-    \item Epoch and seed controls through YAML and Slurm environment overrides.
-\end{itemize}
+\paragraph{Baseline SBERT curriculum.}
+The baseline \texttt{sts\_nli} mode follows the original SBERT intuition
+\cite{reimers-gurevych-2019-sentence-bert}: NLI classification teaches coarse semantic relations,
+while STS fine-tuning calibrates the embedding space for graded similarity. In the NLI stage, the
+model is trained with the original SBERT sentence-pair classifier, where the two sentence embeddings
+$\mathbf{u}$ and $\mathbf{v}$ are combined as the concatenation
+$[\mathbf{u};\mathbf{v};|\mathbf{u}-\mathbf{v}|]$ and passed to a softmax classification head. This
+design is one of the key contributions of SBERT, because it transfers BERT into a siamese sentence
+embedding framework while still exploiting strong supervised NLI signals. In the final STS stage, we
+train on \texttt{sts-train.csv}, select by \texttt{sts-dev.csv}, and report only on
+\texttt{sts-test.csv}; the objective is cosine regression on normalized STS labels:
+\begin{equation}
+\mathcal{L}_{\text{STS}}=\operatorname{MSE}\left(\cos(\mathbf{h}_i,\mathbf{h}_j), y_{ij}\right), \quad y_{ij}\in[0,1]
+\end{equation}
+This baseline is therefore not a trivial reference point, but a strong and carefully designed study
+that remains the foundation for our later enhancements.
 
-At this stage, only one complete evaluation run group has finished. Additional training runs and ablations
-will be filled into the same reporting format.
+\paragraph{Enhancement I: AoE training between NLI and STS.}
+The first high-performing branch inserts an AoE-style intermediate stage after NLI pretraining and
+before STS fine-tuning. The motivation comes from recent work on angle-optimized embeddings
+\cite{li-li-2024-aoe}: cosine similarity is easy to optimize when pairs are moderately similar, but
+its gradient becomes weak in saturation regions close to $1$ or $-1$, which is undesirable for STS
+where many pairs differ only subtly. The key idea is therefore not a different encoder architecture,
+but optimizing \emph{angular ordering}: sentence pairs with higher semantic relatedness should receive
+smaller relative angles. In our implementation this becomes a pairwise angle-ranking objective. For a pair
+$(x_i,x_j)$ with embeddings $\mathbf{h}_i,\mathbf{h}_j$, the angle is
+\begin{equation}
+\Delta\theta_{ij}=
+\operatorname{atan2}\left(
+\begin{aligned}
+&\left|\langle \mathbf{h}_i^{\Im}, \mathbf{h}_j^{\Re}\rangle
+- \langle \mathbf{h}_i^{\Re}, \mathbf{h}_j^{\Im}\rangle\right|, \\
+&\langle \mathbf{h}_i^{\Re}, \mathbf{h}_j^{\Re}\rangle
++ \langle \mathbf{h}_i^{\Im}, \mathbf{h}_j^{\Im}\rangle + \epsilon
+\end{aligned}
+\right)
+\end{equation}
+The model then applies a pairwise ranking loss so that sentence pairs with higher supervision scores
+obtain smaller angles:
+\begin{equation}
+\mathcal{L}_{\text{angle}}=
+\log \left(1+\sum_{y_p>y_q}\exp\left(\frac{\Delta\theta_p-\Delta\theta_q}{\tau_a}\right)\right)
+\end{equation}
+The real/imaginary split is only the implementation mechanism used to compute this angular relation;
+the methodological focus is the ranking of pairwise angles rather than a ``complex-valued'' model in
+itself.
+
+The supervision for this stage is built from both AllNLI and STSBenchmark. 
+We first maps NLI labels to graded scores
+(\texttt{entailment}$=1.0$, \texttt{neutral}$=0.5$, \texttt{contradiction}$=0.0$), normalizes STS
+scores to $[0,1]$, merges the two sources, and deduplicates unordered pairs by keeping the maximum
+score. This gives AoE a denser ordinal training signal than binary similarity learning. Our code
+also adds a symmetric in-batch contrastive term:
+\begin{equation}
+\mathcal{L}_{\text{AoE}}=\lambda_{\text{angle}}\mathcal{L}_{\text{angle}}+\lambda_{\text{cl}}\mathcal{L}_{\text{cl}}
+\end{equation}
+Intuitively, the angle loss improves local ranking sensitivity for fine-grained semantic similarity,
+while the auxiliary contrastive term keeps positive pairs tightly aligned. After this geometry-aware
+stage, we still perform the same final STS cosine fine-tuning for a fair comparison with the baseline.
+
+\paragraph{Enhancement II: MNRL with UniReg before STS.}
+The second best branch replaces the intermediate stage with hard-negative contrastive (from NLI) learning plus a
+uniformity regularizer. The contrastive component is Multiple Negatives Ranking Loss (MNRL), which
+can be viewed as a sentence-pair instantiation of the InfoNCE objective
+\cite{rusak2025infonce}. In our setting, the matched positive is contrasted against all other
+candidates in the batch together with optional hard negatives, making it closely related to the
+supervised SimCSE formulation \cite{gao-etal-2021-simcse}. For each anchor sentence, its paired
+positive is treated as the only correct target, while all other positives in the same batch and
+explicit contradiction examples are used as negatives:
+\begin{equation}
+\mathcal{L}_{\text{MNRL}}=
+-\log\frac{\exp(\operatorname{sim}(\mathbf{z}_i,\mathbf{z}_i^+)/\tau)}
+{\sum_{k}\exp(\operatorname{sim}(\mathbf{z}_i,\mathbf{c}_k)/\tau)}
+\end{equation}
+Here $\mathbf{z}$ denotes L2-normalized sentence embeddings and $\mathbf{c}_k$ denotes the candidate
+pool formed by the matched positive together with in-batch and hard-negative examples. In our data
+builder, NLI entailment pairs are used as positives and contradiction hypotheses for the same premise
+are sampled as hard negatives, matching the supervised contrastive practice advocated by SimCSE.
+
+While studying world models, we noticed the SIGReg regularizer used in LeWM \cite{maes2026lewm},
+which prompted us to ask whether SBERT embeddings may also suffer from a related dimensional
+collapse or cone effect; this heuristic observation led us to look for a lightweight geometric
+regularizer and eventually adopt UniReg.
+Following the alignment-uniformity perspective of contrastive representation learning
+\cite{wang-isola-2020-alignment-uniformity}, we add a weak hyperspherical uniformity regularizer:
+\begin{equation}
+\mathcal{L}_{\text{uni}}=
+\log\left(\frac{1}{|\mathcal{P}|}\sum_{u\neq v}\exp\left(-t\left\|\mathbf{z}_u-\mathbf{z}_v\right\|_2^2\right)+\epsilon\right),
+\end{equation}
+and optimize
+\begin{equation}
+\mathcal{L}_{\text{MNRL-UniReg}}=\mathcal{L}_{\text{MNRL}}+\lambda_{\text{uni}}\mathcal{L}_{\text{uni}}
+\end{equation}
+Minimizing this term encourages embeddings to spread more evenly on the unit hypersphere, which
+reduces representation collapse and improves global geometry, while MNRL still preserves strong
+positive-pair alignment. In our configuration, UniReg is intentionally lightweight
+($\lambda_{\text{uni}}=10^{-3}$), so it acts as a global geometric prior rather than overriding the
+task loss.
+
+\paragraph{Why these two enhancements are complementary.}
+Although both branches improve cosine Spearman on STSBenchmark, they intervene at different levels of
+the embedding geometry. AoE mainly changes the \emph{local ranking signal} by replacing saturated
+cosine supervision with angle-based ordering on graded pairs. MNRL+UniReg instead keeps the familiar
+contrastive objective but improves the \emph{global distribution} of embeddings through hard negatives
+and hyperspherical spreading. This contrast makes the two methods a useful pair of lightweight
+upgrades for a legacy SBERT codebase: one sharpens fine-grained similarity ordering, while the other
+stabilizes the space in which retrieval-style similarity is computed.
+You may ask: Why not put them together? We did try a joint \texttt{MNRL+AoE} stage, and will be anylysed in the case study section.
 
 \section{Results and Analysis}
-Table~\ref{tab:sts-benchmark-mnrl-results} summarizes the MNRL-enhanced setting under the cosine similarity metric, 
-reporting mean and standard deviation over 3 runs with different random seeds. Since the SBERT paper tooks cosine Spearman as the main metric and presented that Pearson is not suitable for STS tasks, we report Cosine Spearman here.
+Table~\ref{tab:sts-benchmark-results} summarizes all completed STSBenchmark experiments under the cosine
+Spearman metric, sorted by the final mean score. Following Sentence-BERT
+\cite{reimers-gurevych-2019-sentence-bert}, we use cosine Spearman as the primary metric because it
+better reflects ranking quality for semantic similarity than Pearson correlation.
 
 \begin{table}[ht]
 \centering
-\caption{Current experiment results on STSBenchmark test set ($\texttt{mean} \pm \texttt{std}$).}
-\label{tab:sts-benchmark-mnrl-results}
-\begin{tabular}{lcccc}
+\caption{Main STSBenchmark results for the methods proposed in this project, sorted by cosine Spearman mean.}
+\label{tab:sts-benchmark-results}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcc}
 \hline
-Setting & Cosine Spearman \\
+Setting & Runs & Cosine Spearman (\%) \\
 \hline
-Pretrained & $76.98\% \pm 0.34\%$ \\
-Baseline \texttt{sts} & $84.40\% \pm 0.40\%$ \\
-Baseline \texttt{NLI+sts} & $84.85\% \pm 0.47\%$  \\
-Enhanced \texttt{NLI+sts+mnrl} & \textbf{$85.38\% \pm 0.77\%$}  \\
+\texttt{STS} & 3 & $84.854 \pm 0.394$ \\
+\texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
+\texttt{NLI+AoE+STS} & 3 & $86.658 \pm 0.278$ \\
+\texttt{NLI+MNRL+STS} & 3 & $86.749 \pm 0.127$ \\
+\texttt{NLI+MNRL-UniReg+STS} & 3 & \textbf{$86.792 \pm 0.126$} \\
 \hline
 \end{tabular}
+}
 \end{table}
 
-The completed setting provides a functional reference point for verifying the evaluation pipeline.
-Since only one model setting has been fully reported, no strong comparative conclusion is drawn yet.
-The next step is to populate the blank rows with trained checkpoints under identical evaluation settings.
+Three observations are clear. First, all three best-performing settings insert an intermediate
+embedding-geometry refinement stage between NLI and final STS fine-tuning, and all of them improve
+substantially over the plain \texttt{STS} and \texttt{NLI+STS} baselines. Second, the strongest result
+is obtained by \texttt{NLI+MNRL+UniReg+STS}, whose cosine Spearman reaches $86.792\%$, slightly
+exceeding the rerun \texttt{NLI+MNRL+STS} result of $86.749\%$ and the AoE branch at $86.658\%$.
+This suggests that adding a weak global uniformity prior is more consistently beneficial than using
+contrastive learning alone.
 
-\section{Case Study: Failure Analysis}
+Relative to the best baseline (\texttt{STS}, $84.854\%$), the gains are approximately
+$+1.94$ points for UniReg, $+1.90$ for rerun MNRL, and $+1.80$ for AoE. Therefore, the current
+evidence favors lightweight geometric regularization and ranking-aware intermediate training as the
+most promising directions in this legacy SBERT setting.
 
-Although MNRL improves STS in our \texttt{sts+nli+mnrl} setting, it does not consistently transfer to
-all evaluation protocols. We observe two negative cases from completed experiments:
-(1) a small but consistent degradation on Wiki Triplets retrieval accuracy, and
-(2) a drop on SentEval transfer classification when comparing \texttt{nli+mnrl} against \texttt{nli}.
+\section{Case Study}
+
+Not all design changes improve performance, even when they appear intuitively compatible with SBERT.
+We first highlight two failed method variants on STSBenchmark itself, then discuss the broader
+transfer failures of MNRL on retrieval and SentEval.
 
 \begin{table}[ht]
 \centering
-\caption{Failure cases of MNRL on different tasks.}
-\label{tab:failure-aggregate}
-\begin{tabular}{lccc}
+\caption{Failure cases on STSBenchmark for additional design variants.}
+\label{tab:failure-sts-methods}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcc}
 \hline
-Benchmark / Metric & Baseline & +MNRL & $\Delta$ \\
+Setting & Runs & Cosine Spearman (\%) \\
 \hline
-Wiki Triplets & 80.80 & 80.42 & $-0.38$ \\
-SentEval (mean) & 85.18 & 84.80 & $-0.38$ \\
-\hline
-\end{tabular}
-\end{table}
-
-For SentEval, the degradation is not limited to a single run: with seeds 42/43/44,
-the run-level score differences are all negative ($-0.51$, $-0.31$, $-0.33$).
-Task-wise differences are shown in Table~\ref{tab:failure-senteval-task}.
-
-\begin{table}[ht]
-\centering
-\caption{SentEval task-level change (\texttt{nli+mnrl} minus \texttt{nli}, in points).}
-\label{tab:failure-senteval-task}
-\begin{tabular}{lc}
-\hline
-Task & $\Delta$ \\
-\hline
-MR Acc. & $-1.23$ \\
-CR Acc. & $-0.40$ \\
-SUBJ Acc. & $+0.86$ \\
-MPQA Acc. & $-0.39$ \\
-SST2 Acc. & $-1.26$ \\
-TREC Acc. & $+0.27$ \\
-MRPC Acc. & $-0.52$ \\
-MRPC F1 & $-1.00$ \\
+Baseline:\texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
+\texttt{NLI+MNRL+AoE+STS} & 3 & $85.667 \pm 0.002$ \\
+\texttt{NLI+MNRL+STS(CoSENT)} & 1 & $85.747 \pm 0.000$ \\
+\texttt{NLI+STS+attn. pooling} & 3 & $84.732 \pm 0.814$ \\
 \hline
 \end{tabular}
+}
 \end{table}
 
-We attribute these failures to objective-task mismatch and data noise sensitivity.
-MNRL emphasizes pairwise alignment with in-batch negatives, which is effective for similarity retrieval
-but may weaken decision boundaries required by transfer classification tasks.
-For Wiki Triplets, converting triplets to pair-only contrastive supervision can introduce noisy positives/negatives,
-and the observed reduction across all three distance metrics suggests a broad embedding geometry shift rather than
-an isolated metric artifact.
-Finally, the Wiki comparison currently uses one run only, so the trend should be validated with multi-seed repetitions.
+These two results are informative because both variants add modeling complexity without improving the
+main metric. The joint \texttt{MNRL+AoE} setup is much weaker than standalone \texttt{MNRL} or AoE,
+suggesting that local angle ranking and contrastive geometry shaping can interfere when optimized
+together in a naive multi-objective stage. The attention-pooling variant also fails to beat even the
+plain \texttt{NLI+STS} baseline, which suggests that changing the pooling architecture is less useful
+than improving the training objective under our current data and compute budget.
 
 \section{Conclusion}
 
