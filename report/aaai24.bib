@@ -18,3 +18,73 @@
   booktitle    = {Proceedings of NAACL-HLT},
   year         = {2019}
 }
+
+@inproceedings{gao-etal-2021-simcse,
+    title = "{S}im{CSE}: Simple Contrastive Learning of Sentence Embeddings",
+    author = "Gao, Tianyu  and
+      Yao, Xingcheng  and
+      Chen, Danqi",
+    editor = "Moens, Marie-Francine  and
+      Huang, Xuanjing  and
+      Specia, Lucia  and
+      Yih, Scott Wen-tau",
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2021",
+    address = "Online and Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.emnlp-main.552/",
+    doi = "10.18653/v1/2021.emnlp-main.552",
+    pages = "6894--6910",
+    abstract = "This paper presents SimCSE, a simple contrastive learning framework that greatly advances the state-of-the-art sentence embeddings. We first describe an unsupervised approach, which takes an input sentence and predicts itself in a contrastive objective, with only standard dropout used as noise. This simple method works surprisingly well, performing on par with previous supervised counterparts. We find that dropout acts as minimal data augmentation and removing it leads to a representation collapse. Then, we propose a supervised approach, which incorporates annotated pairs from natural language inference datasets into our contrastive learning framework, by using ``entailment'' pairs as positives and ``contradiction'' pairs as hard negatives. We evaluate SimCSE on standard semantic textual similarity (STS) tasks, and our unsupervised and supervised models using BERT base achieve an average of 76.3{\%} and 81.6{\%} Spearman{'}s correlation respectively, a 4.2{\%} and 2.2{\%} improvement compared to previous best results. We also show{---}both theoretically and empirically{---}that contrastive learning objective regularizes pre-trained embeddings' anisotropic space to be more uniform, and it better aligns positive pairs when supervised signals are available."
+}
+
+@misc{maes2026lewm,
+      title={LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels}, 
+      author={Lucas Maes and Quentin Le Lidec and Damien Scieur and Yann LeCun and Randall Balestriero},
+      year={2026},
+      eprint={2603.19312},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2603.19312}, 
+}
+
+@inproceedings{li-li-2024-aoe,
+    title = "{A}o{E}: Angle-optimized Embeddings for Semantic Textual Similarity",
+    author = "Li, Xianming  and
+      Li, Jing",
+    editor = "Ku, Lun-Wei  and
+      Martins, Andre  and
+      Srikumar, Vivek",
+    booktitle = "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = aug,
+    year = "2024",
+    address = "Bangkok, Thailand",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.acl-long.101/",
+    doi = "10.18653/v1/2024.acl-long.101",
+    pages = "1825--1839",
+    abstract = "Text embedding is pivotal in semantic textual similarity (STS) tasks, which are crucial components in Large Language Model (LLM) applications. STS learning largely relies on the cosine function as the optimization objective to reflect semantic similarity. However, the cosine has saturation zones rendering vanishing gradients and hindering learning subtle semantic differences in text embeddings. To address this issue, we propose a novel Angle-optimized Embedding model, AoE. It optimizes angle differences in complex space to explore similarity in saturation zones better. To set up a comprehensive evaluation, we experimented with existing short-text STS, our newly collected long-text STS, and downstream task datasets. Extensive experimental results on STS and MTEB benchmarks show that AoE significantly outperforms popular text embedding models neglecting cosine saturation zones. It highlights that AoE can produce high-quality text embeddings and broadly benefit downstream tasks."
+}
+
+@inproceedings{wang-isola-2020-alignment-uniformity,
+author = {Wang, Tongzhou and Isola, Phillip},
+title = {Understanding contrastive representation learning through alignment and uniformity on the hypersphere},
+year = {2020},
+publisher = {JMLR.org},
+abstract = {Contrastive representation learning has been outstandingly successful in practice. In this work, we identify two key properties related to the contrastive loss: (1) alignment (closeness) of features from positive pairs, and (2) uniformity of the induced distribution of the (normalized) features on the hypersphere. We prove that, asymptotically, the contrastive loss optimizes these properties, and analyze their positive effects on downstream tasks. Empirically, we introduce an optimizable metric to quantify each property. Extensive experiments on standard vision and language datasets confirm the strong agreement between both metrics and downstream task performance. Directly optimizing for these two metrics leads to representations with comparable or better performance at downstream tasks than contrastive learning. Project Page: ssnl.github.io/hypersphere. Code: github.com/SsnL/align_uniform.},
+booktitle = {Proceedings of the 37th International Conference on Machine Learning},
+articleno = {921},
+numpages = {11},
+series = {ICML'20}
+}
+
+@misc{rusak2025infonce,
+      title={InfoNCE: Identifying the Gap Between Theory and Practice}, 
+      author={Evgenia Rusak and Patrik Reizinger and Attila Juhos and Oliver Bringmann and Roland S. Zimmermann and Wieland Brendel},
+      year={2025},
+      eprint={2407.00143},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2407.00143}, 
+}

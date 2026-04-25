@@ -12,8 +12,12 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sentence_transformers import LoggingHandler, SentenceTransformer, SentencesDataset
-from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
-from sentence_transformers.evaluation import SimilarityFunction
+from sentence_transformers.evaluation import (
+    EmbeddingDiagnosticsEvaluator,
+    EmbeddingSimilarityEvaluator,
+    SequentialEvaluator,
+    SimilarityFunction,
+)
 from sentence_transformers.readers import STSDataReader
 from sentence_transformers.util import set_seed
 
@@ -99,7 +103,12 @@ def main():
         sts_reader = STSDataReader(args.sts_path)
         test_data = SentencesDataset(examples=sts_reader.get_examples(args.sts_test_file), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=args.batch_size)
-        evaluator = EmbeddingSimilarityEvaluator(test_dataloader, name="sts_test", main_similarity=main_similarity)
+        evaluator = SequentialEvaluator(
+            [
+                EmbeddingDiagnosticsEvaluator(test_dataloader, name="sts_test"),
+                EmbeddingSimilarityEvaluator(test_dataloader, name="sts_test", main_similarity=main_similarity),
+            ]
+        )
 
         score = model.evaluate(evaluator, output_path=run_output_path)
         metrics = _read_eval_metrics(os.path.join(run_output_path, "similarity_evaluation_sts_test_results.csv"))

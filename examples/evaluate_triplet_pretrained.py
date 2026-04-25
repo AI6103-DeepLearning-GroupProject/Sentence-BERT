@@ -12,7 +12,12 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sentence_transformers import LoggingHandler, SentenceTransformer, SentencesDataset
-from sentence_transformers.evaluation import SimilarityFunction, TripletEvaluator
+from sentence_transformers.evaluation import (
+    EmbeddingDiagnosticsEvaluator,
+    SequentialEvaluator,
+    SimilarityFunction,
+    TripletEvaluator,
+)
 from sentence_transformers.readers import TripletReader
 from sentence_transformers.util import set_seed
 
@@ -122,7 +127,12 @@ def main():
 
         test_data = SentencesDataset(examples=reader.get_examples(args.triplet_test_file), model=model)
         test_dataloader = DataLoader(test_data, shuffle=False, batch_size=args.batch_size)
-        evaluator = TripletEvaluator(test_dataloader, main_distance_function=main_distance, name="triplet_test")
+        evaluator = SequentialEvaluator(
+            [
+                EmbeddingDiagnosticsEvaluator(test_dataloader, name="triplet_test"),
+                TripletEvaluator(test_dataloader, main_distance_function=main_distance, name="triplet_test"),
+            ]
+        )
 
         score = model.evaluate(evaluator, output_path=run_output_path)
         metrics = _read_eval_metrics(os.path.join(run_output_path, "triplet_evaluation_triplet_test_results.csv"))
