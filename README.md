@@ -196,6 +196,10 @@ Runtime model variants are defined in `examples/config.yaml`:
 > Only `sts_nli_mnrl_cosent` replaces the final STS loss with CoSENT. Other modes
 keep their existing losses.
 
+### Attention Pooling
+
+Pooling varients are also defined in `examples/config.yaml`, you can switch pooling type by changing the config.
+
 ## Reproducible Local Runs
 
 ### Train the Current Default Mode
