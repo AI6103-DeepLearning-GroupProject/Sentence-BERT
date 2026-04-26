@@ -15,6 +15,7 @@
 \usepackage{amsmath}
 \usepackage{placeins}  % Fix the random figure placement by LaTeX
 \usepackage{lipsum}
+\usepackage{enumitem}
 
 % DISALLOWED PACKAGES
 % \usepackage{authblk} -- This package is specifically forbidden
@@ -65,23 +66,25 @@
 \setcounter{secnumdepth}{1}
 
 % Title should use Title Case.
-\title{\huge AI6103 - Deep Learning Group Project Report \\ \Large Revisiting Sentence-BERT: Reproduce and Lightweight Enhancements}
+\title{\huge AI6103 - Deep Learning Group Project Report \\ \Large Revisiting Sentence-BERT: Reproduction and Lightweight Enhancements}
 
 \author{
 \begin{tabular}{ccc}
-\textbf{Dai Ziqiao} & \textbf{Dai Dongjie} & \textbf{Li Huilin} \\
-G1234567A & G1234567A & G1234567A \\[1em]
+\textbf{Dai Zi Qiao} & \textbf{Dai Dongjie} & \textbf{Li Huilin} \\
+G2509604K & G2503624K& G2503458K \\
+ZDAI002@e.ntu.edu.sg & DONGJIE001@e.ntu.edu.sg & HUILIN002@e.ntu.edu.sg \\[1em]
 \multicolumn{3}{c}{
 \begin{tabular}{cc}
 \textbf{Li Zian} & \textbf{Zhang Yanhai} \\
-G1234567A & G2509626L
+G2509698B & G2509626L \\
+C250276@e.ntu.edu.sg & ZH0010AI@e.ntu.edu.sg \\
 \end{tabular}
 }
 \end{tabular}
 }
 
 \affiliations{
-    Nanyang Technological University
+    \large Nanyang Technological University \\[1em]
 }
 
 \begin{document}
@@ -89,71 +92,111 @@ G1234567A & G2509626L
 \maketitle
 
 \begin{abstract}
-This project revisits the original Sentence-BERT (SBERT) recipe on the legacy
-sentence-transformers v0.2.4 codebase (Dec 2019) and evaluates reproducibility under a Slurm HPC environment.
-Our practical objective is to identify low-compute improvements that remain compatible with a 2019-era training stack.
-We first establish a reproducible baseline around BERT-based SBERT training and STSBenchmark evaluation,
-then prepare an extensible runtime configuration for controlled comparison across model variants and data curricula.
-This report summarizes the current pipeline and preliminary results.
+This project revisits the original Sentence-BERT framework by Reimers and Gurevych \cite{reimers-gurevych-2019-sentence-bert} and evaluates its reproducibility in a legacy implementation setting. 
+Our goal is to reproduce the original SBERT-base training pipeline and investigate whether lightweight objective-level modifications can improve Semantic Textual Similarity (STS) performance on the STSBenchmark dataset without changing the underlying architecture. 
+The training pipeline first warm-starts the encoder on natural language inference (NLI), then optionally reshapes the embedding space with an intermediate objective, and finally adapts the model to STSBenchmark with direct similarity supervision. 
+Based on this pipeline, we study two main enhancement directions: AoE-style STS fine-tuning, which sharpens local similarity ranking, and an MNRL-based contrastive stage with a lightweight uniformity regularizer, which improves the global embedding distribution. Furthermore, we conducted a comparative study between standard Mean Pooling and an Attention Pooling mechanism to evaluate if structural complexity could offer further gains.
+According to the experimental results, the best result is achieved by applying better contrastive learning with uniformity regularizer, which obtains the highest cosine Spearman score on the dataset. 
+Overall, the results show that within the 2019 SBERT codebase, meaningful gains can still be achieved through careful objective design, runtime configuration, and evaluation without modifying the original architecture.
+
 \end{abstract}
 
 \section{Introduction}
-Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert} addresses the inefficiency of cross-encoder sentence-pair
-inference by learning fixed-size sentence embeddings that can be compared with simple similarity functions.
-This design dramatically reduces pairwise search cost while retaining strong semantic textual similarity (STS) performance.
+Sentence-BERT was proposed to address the inefficiency of standard BERT on sentence-pair tasks. Instead of jointly encoding every sentence pair at inference time, it extends BERT with a siamese architecture that produces a fixed-size sentence embedding for each input. 
+These embeddings can then be compared efficiently using cosine similarity. 
+In this way, SBERT becomes better suited to Semantic Textual Similarity (STS) and related retrieval-style applications.
 
-In this course project, we reproduce and extend the early SBERT setting using the original-style implementation
-on sentence-transformers v0.2.4 (Dec 2019). The engineering target is not to maximize raw leaderboard performance with modern
-large-scale pretraining, but to obtain measurable gains under constrained compute and reproducible Slurm execution.
+Although sentence embedding models have advanced substantially, many practical workflows still depend on older training stacks because of compute constraints or compatibility requirements. This motivates a narrower but important question: can we still obtain meaningful gains within the original SBERT framework without introducing architectural change?
 
-Our current milestone focuses on:
-\begin{itemize}
-    \item Building robust Slurm scripts for data setup, training, and evaluation.
-    \item Unifying runtime options via YAML configuration.
-    \item Establishing a stable baseline before testing enhanced training objectives.
-\end{itemize}
+To answer this question, we keep the SBERT backbone unchanged and investigate objective-level modifications under a three-stage curriculum: NLI warm-start, optional geometry shaping, and final STS adaptation. The plain reference systems in this report are \texttt{STS} and \texttt{NLI+STS}. 
+On top of them, we study two lightweight enhancement directions: an AoE-style ranking objective for finer local similarity ordering, and an MNRL-based contrastive stage with UniReg for improving the global geometry of the embedding space.
 
-\section{Related Works}
-The core reference is Sentence-BERT \cite{reimers-gurevych-2019-sentence-bert},
-which adapts BERT \cite{devlin-etal-2019-bert} into a siamese/triplet framework for efficient
-sentence embedding learning. The original paper reports strong transfer performance on STS tasks
-with dramatically faster semantic search compared with vanilla BERT pairwise inference.
+The final results show that objective design matters more than architectural modification in this legacy setting. All three main enhanced branches outperform the plain baselines, with \texttt{NLI+MNRL+UniReg+STS} achieving the highest mean cosine Spearman score on STSBenchmark. 
+At the same time, some seemingly reasonable combinations, such as jointly applying MNRL and AoE, do not yield further gains. These findings suggest that even within a 2019-style SBERT codebase, careful objective design can still produce meaningful and reproducible improvements.
 
-Our implementation scope currently follows the original SBERT spirit:
-NLI/STS-driven supervised fine-tuning, pooling-based sentence embeddings, and STSBenchmark-based reporting.
-The extension path in this project emphasizes lightweight training-strategy upgrades (e.g., multi-stage curricula)
-that can be integrated into the legacy codebase with low engineering overhead.
+\section{Related Work}
+
+\subsection{The Foundation of Efficient Sentence Embeddings}
+Before the widespread adoption of transformer-based siamese networks, models like the Universal Sentence Encoder \cite{cer-etal-2018-universal} provided early, robust baselines for encoding sentences into fixed-length vectors. 
+However, our research builds directly upon Sentence-BERT (SBERT), which adapted the standard BERT architecture into a siamese and triplet network framework \cite{reimers-gurevych-2019-sentence-bert, devlin-etal-2019-bert}. 
+While the field has since explored decoder-only architectures for text embeddings, such as SGPT \cite{muennighoff-2022-sgpt}, our implementation strictly preserves the 2019-style SBERT training stack. 
+Rather than introducing architectural shifts, we utilize a three-stage sentence embedding curriculum---warm-starting on Natural Language Inference (NLI) data, applying an intermediate geometry-shaping objective, and adapting to Semantic Textual Similarity (STS) data---to achieve lightweight, reproducible gains.
+
+\subsection{The Shift Towards Contrastive Representation Learning}
+To improve the global geometry of the embedding space, our methodology intersects with the modern paradigm of contrastive learning. 
+The introduction of SimCSE \cite{gao-etal-2021-simcse} marked a significant shift by demonstrating how standard supervised contrastive learning could drastically improve embedding alignment. 
+Subsequent frameworks built heavily upon this foundation: DiffCSE \cite{chuang-etal-2022-diffcse} introduced equivariant contrastive learning to capture subtle semantic differences. 
+Meanwhile, modern state-of-the-art models like E5 \cite{wang-etal-2022-e5}, GTE \cite{li-etal-2023-gte}, and M3 Embedding \cite{chen2024bge} demonstrated the sheer power of multi-stage contrastive pre-training and self-knowledge distillation over massive, multi-lingual text pairs. 
+
+Inspired by these multi-stage curricula, our approach utilizes Multiple Negatives Ranking Loss (MNRL), which functions as a sentence-pair instantiation of the InfoNCE objective \cite{rusak2025infonce}. 
+To counteract dimensional collapse, we pair this with a lightweight uniformity regularizer (UniReg) inspired by contrastive alignment properties \cite{wang-isola-2020-alignment-uniformity}. 
+This encourages embeddings to spread evenly across the unit hypersphere without requiring the massive parameter scale of modern alternatives.
+
+\subsection{Angle-Optimized Similarity Supervision}
+Standard cosine regression frequently suffers from a saturation zone, where gradient signals diminish for highly similar sentence pairs. To address this limitation in the final STS fine-tuning stage, we draw upon Angle-optimized Embeddings (AoE) \cite{li-li-2024-aoe}. 
+Instead of strictly relying on saturated cosine regression, AoE introduces a ranking-aware supervision signal based on angular relations. By replacing the plain regression objective with an angle-based ordering on graded pairs, our model achieves heightened sensitivity to fine-grained semantic differences without requiring structural modifications to the underlying BERT encoder.
 
 \section{Experiment Setups}
-\textbf{Codebase.}
-We use a legacy Sentence-BERT repository aligned with sentence-transformers v0.2.4 (2019-style workflow).
+We evaluate all methods within a single reproducible pipeline built on the legacy
+\texttt{sentence-transformers v0.2.4} stack. The backbone is fixed to
+\texttt{bert-base-uncased} with mean pooling, so the main experimental variables are the training
+curriculum, intermediate objective, and final STS supervision.
 
-\textbf{Execution environment.}
-All experiments are executed using Single GPU NVIDIA L40S.
+\subsection{Execution Environment}
+Experiments were run on GPU servers under a unified software environment with fixed package
+versions. This standardization is important because the project was executed across multiple
+machines, and we wanted observed differences to reflect training objectives rather than environment
+drift.
 
-\textbf{Dataset protocol.}
-For STSBenchmark, we strictly follow the standard split protocol:
-\texttt{sts-train.csv} is used for training, \texttt{sts-dev.csv} for model selection, and
-\texttt{sts-test.csv} only for final reporting. This separation is preserved in all runtime modes,
-so the final cosine Spearman numbers are evaluated without data leakage from the test split.
-Training/evaluation scripts are configured to normalize expected dataset paths and optionally auto-download
-required files when missing.
+\subsection{Model Configurations}
+We compare two plain baselines and several lightweight enhancement branches:
+\begin{itemize}[itemsep=0pt]
+    \item \textbf{Plain baselines:} \texttt{STS} and \texttt{NLI+STS}.
+    \item \textbf{Contrastive branch:} \texttt{NLI+MNRL+STS}, with \texttt{NLI+MNRL+UniReg+STS} as the regularized variant.
+    \item \textbf{Ranking branch:} \texttt{NLI+AoE+STS}, which replaces plain STS cosine regression with AoE-style ranking supervision.
+    \item \textbf{Additional variants:} joint \texttt{MNRL+AoE}, CoSENT-based STS replacement, and attention pooling, which are analyzed as case-study variants rather than main methods.
+\end{itemize}
+All configurations are managed through a hierarchical YAML setup so that only the intended stage-level
+differences change across experiments.
 
-\textbf{Metrics.}
-We report Cosine Spearman correlations under similarities, as this is the one used and promoted in the original SBERT work.
-For multi-seed evaluation, we aggregate mean and standard deviation over repeated runs.
+\subsection{Data and Training Protocol}
+The main data sources are AllNLI and STSBenchmark. AllNLI provides supervised pair relations for the
+NLI warm-start and for constructing contrastive positives and hard negatives, while STSBenchmark
+provides the graded similarity labels used in the final evaluation pipeline. For STSBenchmark, we
+strictly separate \texttt{train}, \texttt{dev}, and \texttt{test} splits to avoid data leakage. When
+an experiment requires pairwise contrastive or scored-pair supervision, these training pairs are
+constructed automatically from the corresponding training resources before optimization.
+
+Each configuration is run multiple times with different random seeds for robustness. The $i$-th seed
+is defined as
+\begin{equation}
+    seed_i = seed_{start} + (i-1) \times seed_{step} .
+\end{equation}
+Each run starts from a clean initialization so that results from different methods remain directly
+comparable.
+
+\subsection{Evaluation}
+After training, we evaluate the resulting checkpoints on the designated downstream benchmark and
+aggregate the reported metrics across runs. For the STS-focused experiments in this report, the main
+metric is cosine Spearman, following the original SBERT evaluation protocol
+\cite{reimers-gurevych-2019-sentence-bert}.
 
 \section{Methodology}
 Our goal is to improve the original SBERT recipe without breaking compatibility with the 2019
 \texttt{sentence-transformers} training stack. All reported best runs used the \texttt{bert-base-uncased} 
 with mean pooling and maximum sequence length 128,
 while the training curriculum is switched through \texttt{config.yaml}. 
-The common backbone of all experiments is a three-stage view of sentence embedding learning:
+The common backbone of all experiments is a three-stage view of sentence embedding learning. While the standard SBERT recipe relies on \textbf{Mean Pooling}:
 \begin{equation}
 \mathbf{h}(x)=\operatorname{MeanPool}(\operatorname{BERT}(x))
 \end{equation}
-We first warm-start the encoder on NLI, then optionally reshape the embedding geometry with an
-intermediate objective, and finally adapt to STS with direct similarity supervision.
+we also investigated a structural variant using \textbf{Attention Pooling}. In this setting, the model learns to assign a weight $\alpha_i$ to each token embedding $\mathbf{h}_i$ via a trainable vector $w$:
+\begin{equation}
+\alpha_i = \frac{\exp(w^\top \mathbf{h}_i)}{\sum_j \exp(w^\top \mathbf{h}_j)}, \quad \mathbf{h}(x) = \sum_i \alpha_i \mathbf{h}_i
+\end{equation}
+This allows us to compare whether a learnable weighted aggregation of tokens can capture more distinctive semantics than a uniform average. 
+
+\textbf{Regardless of the pooling method}, the training process follows a three-stage curriculum: we first warm-start the encoder on NLI, then optionally reshape the embedding geometry with an intermediate objective, and finally adapt to STS with direct similarity supervision.
 
 \paragraph{Baseline SBERT curriculum.}
 The baseline \texttt{sts\_nli} mode follows the original SBERT intuition
@@ -172,15 +215,16 @@ train on \texttt{sts-train.csv}, select by \texttt{sts-dev.csv}, and report only
 This baseline is therefore not a trivial reference point, but a strong and carefully designed study
 that remains the foundation for our later enhancements.
 
-\paragraph{Enhancement I: AoE training between NLI and STS.}
-The first high-performing branch inserts an AoE-style intermediate stage after NLI pretraining and
-before STS fine-tuning. The motivation comes from recent work on angle-optimized embeddings
-\cite{li-li-2024-aoe}: cosine similarity is easy to optimize when pairs are moderately similar, but
-its gradient becomes weak in saturation regions close to $1$ or $-1$, which is undesirable for STS
-where many pairs differ only subtly. The key idea is therefore not a different encoder architecture,
-but optimizing \emph{angular ordering}: sentence pairs with higher semantic relatedness should receive
-smaller relative angles. In our implementation this becomes a pairwise angle-ranking objective. For a pair
-$(x_i,x_j)$ with embeddings $\mathbf{h}_i,\mathbf{h}_j$, the angle is
+\paragraph{Enhancement I: AoE-style STS fine-tuning after NLI warm-start.}
+Our first enhancement keeps the standard NLI warm-start but replaces the final STS regression loss
+with an AoE-inspired ranking objective. The motivation comes from angle-optimized embeddings
+\cite{li-li-2024-aoe}: cosine similarity is easy to optimize for moderately similar pairs, but its
+gradient becomes weak in saturation regions close to $1$ or $-1$, which is undesirable for STS where
+many sentence pairs differ only subtly. Instead of changing the encoder architecture, we keep the same
+SBERT backbone and modify the STS supervision so that higher-scoring sentence pairs are ranked above
+lower-scoring ones. In our implementation, this becomes a lightweight objective with two ranking terms,
+one on cosine similarity and one on angle-derived similarity. For a pair $(x_i,x_j)$ with embeddings
+$\mathbf{h}_i,\mathbf{h}_j$, the angle is
 \begin{equation}
 \Delta\theta_{ij}=
 \operatorname{atan2}\left(
@@ -202,25 +246,35 @@ The real/imaginary split is only the implementation mechanism used to compute th
 the methodological focus is the ranking of pairwise angles rather than a ``complex-valued'' model in
 itself.
 
-The supervision for this stage is built from both AllNLI and STSBenchmark. 
-We first maps NLI labels to graded scores
-(\texttt{entailment}$=1.0$, \texttt{neutral}$=0.5$, \texttt{contradiction}$=0.0$), normalizes STS
-scores to $[0,1]$, merges the two sources, and deduplicates unordered pairs by keeping the maximum
-score. This gives AoE a denser ordinal training signal than binary similarity learning. Our code
-also adds a symmetric in-batch contrastive term:
+The cosine term follows the same ranking idea on pairwise cosine scores, so the final objective is
+\begin{equation}
+\mathcal{L}_{\text{AoE-lite}}=
+\lambda_{\text{cos}}\mathcal{L}_{\text{cos}}+
+\lambda_{\text{angle}}\mathcal{L}_{\text{angle}} .
+\end{equation}
+In our implementation, STS labels are normalized to $[0,1]$ and used directly as ranking signals.
+This branch therefore remains lightweight and fully compatible with the legacy 2019-style SBERT
+training stack while still introducing geometry-aware similarity supervision. Unlike the heavier
+hybrid branch discussed later, the reported \texttt{NLI+AoE+STS} result should be interpreted as an
+AoE-style replacement for the STS loss rather than a separate contrastive curriculum built from merged
+NLI and STS scored pairs.
+
+For comparison, we also experimented with a stronger AoE-flavored hybrid that combines angle ranking
+with an auxiliary contrastive term:
 \begin{equation}
 \mathcal{L}_{\text{AoE}}=\lambda_{\text{angle}}\mathcal{L}_{\text{angle}}+\lambda_{\text{cl}}\mathcal{L}_{\text{cl}}
 \end{equation}
 Intuitively, the angle loss improves local ranking sensitivity for fine-grained semantic similarity,
-while the auxiliary contrastive term keeps positive pairs tightly aligned. After this geometry-aware
-stage, we still perform the same final STS cosine fine-tuning for a fair comparison with the baseline.
+while the auxiliary contrastive term keeps positive pairs tightly aligned. However, as shown in the
+case study section, this joint AoE+MNRL direction does not outperform the simpler AoE-lite branch in
+our current setting.
 
 \paragraph{Enhancement II: MNRL with UniReg before STS.}
-The second best branch replaces the intermediate stage with hard-negative contrastive (from NLI) learning plus a
+One strong branch replaces the intermediate stage with hard-negative contrastive learning derived from NLI plus a
 uniformity regularizer. The contrastive component is Multiple Negatives Ranking Loss (MNRL), which
 can be viewed as a sentence-pair instantiation of the InfoNCE objective
 \cite{rusak2025infonce}. In our setting, the matched positive is contrasted against all other
-candidates in the batch together with optional hard negatives, making it closely related to the
+candidates in the batch together with hard negatives from NLI, making it closely related to the
 supervised SimCSE formulation \cite{gao-etal-2021-simcse}. For each anchor sentence, its paired
 positive is treated as the only correct target, while all other positives in the same batch and
 explicit contradiction examples are used as negatives:
@@ -230,7 +284,7 @@ explicit contradiction examples are used as negatives:
 {\sum_{k}\exp(\operatorname{sim}(\mathbf{z}_i,\mathbf{c}_k)/\tau)}
 \end{equation}
 Here $\mathbf{z}$ denotes L2-normalized sentence embeddings and $\mathbf{c}_k$ denotes the candidate
-pool formed by the matched positive together with in-batch and hard-negative examples. In our data
+pool formed by the matched positive together with in-batch plus hard-negative examples. In our data
 builder, NLI entailment pairs are used as positives and contradiction hypotheses for the same premise
 are sampled as hard negatives, matching the supervised contrastive practice advocated by SimCSE.
 
@@ -253,6 +307,9 @@ reduces representation collapse and improves global geometry, while MNRL still p
 positive-pair alignment. In our configuration, UniReg is intentionally lightweight
 ($\lambda_{\text{uni}}=10^{-3}$), so it acts as a global geometric prior rather than overriding the
 task loss.
+A small but consistent gain on geometry-level metrics was also observed on \texttt{sts\_dev}: the
+effective rank increased from 196.6 to 204.7 out of an embedding dimension of 768 when UniReg was
+added on top of MNRL.
 
 \paragraph{Why these two enhancements are complementary.}
 Although both branches improve cosine Spearman on STSBenchmark, they intervene at different levels of
@@ -262,80 +319,101 @@ contrastive objective but improves the \emph{global distribution} of embeddings 
 and hyperspherical spreading. This contrast makes the two methods a useful pair of lightweight
 upgrades for a legacy SBERT codebase: one sharpens fine-grained similarity ordering, while the other
 stabilizes the space in which retrieval-style similarity is computed.
-You may ask: Why not put them together? We did try a joint \texttt{MNRL+AoE} stage, and will be anylysed in the case study section.
+A natural question is whether the two objectives can be combined. We did test a joint
+\texttt{MNRL+AoE} stage, and it is analyzed in the case study section.
 
 \section{Results and Analysis}
 Table~\ref{tab:sts-benchmark-results} summarizes all completed STSBenchmark experiments under the cosine
-Spearman metric, sorted by the final mean score. Following Sentence-BERT
+Spearman metric, sorted by the improvements. Following Sentence-BERT
 \cite{reimers-gurevych-2019-sentence-bert}, we use cosine Spearman as the primary metric because it
 better reflects ranking quality for semantic similarity than Pearson correlation.
 
 \begin{table}[ht]
 \centering
-\caption{Main STSBenchmark results for the methods proposed in this project, sorted by cosine Spearman mean.}
+\caption{Main STSBenchmark results for different methods.}
 \label{tab:sts-benchmark-results}
 \resizebox{\columnwidth}{!}{
 \begin{tabular}{lcc}
 \hline
 Setting & Runs & Cosine Spearman (\%) \\
 \hline
-\texttt{STS} & 3 & $84.854 \pm 0.394$ \\
-\texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
+Baseline1: \texttt{STS} & 3 & $84.854 \pm 0.394$ \\
+Baseline2: \texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
 \texttt{NLI+AoE+STS} & 3 & $86.658 \pm 0.278$ \\
 \texttt{NLI+MNRL+STS} & 3 & $86.749 \pm 0.127$ \\
-\texttt{NLI+MNRL-UniReg+STS} & 3 & \textbf{$86.792 \pm 0.126$} \\
+\texttt{NLI+MNRL-UniReg+STS} & 3 & $\mathbf{86.792 \pm 0.126}$ \\
 \hline
 \end{tabular}
 }
 \end{table}
 
-Three observations are clear. First, all three best-performing settings insert an intermediate
-embedding-geometry refinement stage between NLI and final STS fine-tuning, and all of them improve
-substantially over the plain \texttt{STS} and \texttt{NLI+STS} baselines. Second, the strongest result
-is obtained by \texttt{NLI+MNRL+UniReg+STS}, whose cosine Spearman reaches $86.792\%$, slightly
-exceeding the rerun \texttt{NLI+MNRL+STS} result of $86.749\%$ and the AoE branch at $86.658\%$.
-This suggests that adding a weak global uniformity prior is more consistently beneficial than using
-contrastive learning alone.
+Besides the faithfully reproduced baselines, three observations are notable. 
+First, all three strongest settings introduce an additional
+geometry-shaping objective beyond the plain \texttt{STS} and \texttt{NLI+STS} baselines, and all of
+them improve substantially over those two references. Second, the highest mean is obtained by
+\texttt{NLI+MNRL+UniReg+STS}, whose cosine Spearman reaches $86.792\%$, marginally exceeding the rerun
+\texttt{NLI+MNRL+STS} result of $86.749\%$ and the AoE branch at $86.658\%$. Because the gap over
+plain rerun MNRL is small, we interpret UniReg as a promising lightweight improvement rather than a
+decisive shift in training regime. Third, the AoE branch remains highly competitive, which suggests
+that ranking-aware STS supervision is a strong alternative to contrastive-only geometry shaping in
+this legacy SBERT setting. Notably, structural modifications such as Attention Pooling were also evaluated but showed diminishing returns compared to objective-level changes; these findings are detailed in the Case Study
 
-Relative to the best baseline (\texttt{STS}, $84.854\%$), the gains are approximately
+Relative to the strongest plain baseline (\texttt{STS}, $84.854\%$), the gains are approximately
 $+1.94$ points for UniReg, $+1.90$ for rerun MNRL, and $+1.80$ for AoE. Therefore, the current
-evidence favors lightweight geometric regularization and ranking-aware intermediate training as the
-most promising directions in this legacy SBERT setting.
+evidence favors lightweight geometric regularization and ranking-aware objective design as the most
+promising directions in this legacy SBERT setting.
 
 \section{Case Study}
 
-Not all design changes improve performance, even when they appear intuitively compatible with SBERT.
-We first highlight two failed method variants on STSBenchmark itself, then discuss the broader
-transfer failures of MNRL on retrieval and SentEval.
+Table~\ref{tab:failure-sts-methods} summarizes three plausible variants that we tested but that still fall short of the best methods in this project. The common pattern is that additional complexity does not translate into better STS behavior unless the new objective is well aligned with the geometry that SBERT already learns.
 
 \begin{table}[ht]
 \centering
-\caption{Failure cases on STSBenchmark for additional design variants.}
+\caption{Performance of additional design variants on STSBenchmark.}
 \label{tab:failure-sts-methods}
 \resizebox{\columnwidth}{!}{
 \begin{tabular}{lcc}
 \hline
 Setting & Runs & Cosine Spearman (\%) \\
 \hline
-Baseline:\texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
-\texttt{NLI+MNRL+AoE+STS} & 3 & $85.667 \pm 0.002$ \\
+Baseline: \texttt{NLI+STS} & 3 & $84.853 \pm 0.474$ \\
+\texttt{NLI+MNRL+attn. pooling+STS} & 3 & $\mathbf{86.550 \pm 0.230}$ \\
+\texttt{NLI+MNRL+AoE+STS} & 3 & $85.667 \pm 0.197$ \\
 \texttt{NLI+MNRL+STS(CoSENT)} & 1 & $85.747 \pm 0.000$ \\
-\texttt{NLI+STS+attn. pooling} & 3 & $84.732 \pm 0.814$ \\
 \hline
 \end{tabular}
 }
 \end{table}
 
-These two results are informative because both variants add modeling complexity without improving the
-main metric. The joint \texttt{MNRL+AoE} setup is much weaker than standalone \texttt{MNRL} or AoE,
-suggesting that local angle ranking and contrastive geometry shaping can interfere when optimized
-together in a naive multi-objective stage. The attention-pooling variant also fails to beat even the
-plain \texttt{NLI+STS} baseline, which suggests that changing the pooling architecture is less useful
-than improving the training objective under our current data and compute budget.
+The \texttt{NLI+MNRL+attn. pooling+STS} variant presents an interesting case where structural complexity provides diminishing returns. While it achieves a significant gain over the plain \texttt{NLI+STS} baseline ($86.550\%$ vs. $84.853\%$), it fails to outperform the simpler \texttt{NLI+MNRL+STS} variant using mean pooling ($86.749\%$). This is consistent with the original SBERT finding that simple pooling over a strong siamese encoder is already a competitive inductive bias \cite{reimers-gurevych-2019-sentence-bert}. Under our limited data and compute budget, adding trainable parameters through an attention mechanism across the three-stage pipeline appears less useful than changing the training objective alone.
+
+The most instructive failure is the joint \texttt{NLI+MNRL+AoE+STS} branch. Although both MNRL and AoE are individually effective, they emphasize different aspects of the embedding geometry. AoE is designed to improve fine-grained angular ordering in STS \cite{li-li-2024-aoe}, whereas contrastive objectives such as MNRL mainly reshape the space through batch-level alignment and uniformity \cite{gao-etal-2021-simcse}. When these signals are combined in a naive multi-objective stage, the optimization appears to become less coherent. Although the hybrid result is still better than the plain baselines, it is clearly worse than standalone \texttt{NLI+MNRL+STS} or \texttt{NLI+AoE+STS}. This suggests that local pairwise ranking and global contrastive shaping are not automatically complementary. Future work should therefore investigate how to combine their strengths more seamlessly.
+
+The \texttt{NLI+MNRL+STS(CoSENT)} branch shows a milder limitation. Replacing the final regression loss with a ranking-style STS objective does not provide further improvement and instead pulls the MNRL branch slightly backward. This suggests that ranking supervision alone may be insufficient when the intermediate embedding geometry is not explicitly regularized.
+
+Taken together, these failure cases reinforce the main lesson of the project: in a legacy SBERT stack, careful objective design contributes more than architectural complexity or naive objective composition.
 
 \section{Conclusion}
 
-\lipsum[1] % Placeholder
+This project revisited the original Sentence-BERT recipe under a legacy
+\texttt{sentence-transformers} v0.2.4 codebase and a reproducible Slurm-based workflow. Rather than
+targeting modern large-scale embedding leaderboards, our goal was to identify lightweight
+objective-level improvements that remain compatible with a 2019-style SBERT training stack.
+
+The final results show that training objective design matters more than pooling layer modification in this setting. 
+Relative to the strongest plain baseline, all three enhanced branches improve cosine Spearman on STSBenchmark by around 1.8 to 1.9 points. 
+Among them,
+adding \texttt{MNRL+UniReg} stage achieves the highest mean score, 
+while \texttt{AoE} remains highly competitive and demonstrates that ranking-aware STS supervision is an effective alternative to standard cosine regression. 
+In contrast, naively combining MNRL and AoE in the same branch does not
+improve further, suggesting that local angle-based ranking and contrastive geometry shaping may
+interfere when jointly optimized.
+
+Overall, the project shows that meaningful gains can still be obtained in a legacy SBERT codebase
+through careful objective design, reproducible runtime configuration, and disciplined evaluation. A
+natural next step is to further analyze why the hybrid \texttt{MNRL+AoE} setting underperforms,
+improve the quality of negative sampling, and test whether simpler ranking objectives such as CoSENT
+can provide a cleaner bridge between AoE-style supervision and contrastive learning.
 
 \bigskip
 
