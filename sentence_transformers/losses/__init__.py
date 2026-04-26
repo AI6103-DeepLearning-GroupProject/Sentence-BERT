@@ -6,3 +6,4 @@ from .MultipleNegativesRankingLoss import *
 from .MultipleNegativesRankingUniRegLoss import *
 from .TripletLoss import *
 from .AoECombinedLoss import *
+from .AoELiteLoss import *

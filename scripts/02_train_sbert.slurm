@@ -470,6 +470,13 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
         "datasets/stsbenchmark/sts-test.csv"
       )
       ;;
+    sts_aoe)
+      required_files=(
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
     nli)
       required_files=(
         "datasets/AllNLI/s1.train.gz"
@@ -480,6 +487,16 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
       )
       ;;
     sts_nli)
+      required_files=(
+        "datasets/AllNLI/s1.train.gz"
+        "datasets/AllNLI/s2.train.gz"
+        "datasets/AllNLI/labels.train.gz"
+        "datasets/stsbenchmark/sts-train.csv"
+        "datasets/stsbenchmark/sts-dev.csv"
+        "datasets/stsbenchmark/sts-test.csv"
+      )
+      ;;
+    sts_nli_aoe)
       required_files=(
         "datasets/AllNLI/s1.train.gz"
         "datasets/AllNLI/s2.train.gz"
@@ -536,7 +553,7 @@ if [ "${EXPERIMENT}" = "runtime" ]; then
       )
       ;;
     *)
-      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, nli, nli_mnrl, sts_nli, sts_nli_mnrl, sts_nli_mnrl_unireg, sts_nli_mnrl_unireg_cosent, sts_nli_mnrl_cosent, sts_nli_mnrl_aoe, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
+      echo "Unknown DATA_MODE='${DATA_MODE}'. Use sts, sts_aoe, nli, nli_mnrl, sts_nli, sts_nli_aoe, sts_nli_mnrl, sts_nli_mnrl_unireg, sts_nli_mnrl_unireg_cosent, sts_nli_mnrl_cosent, sts_nli_mnrl_aoe, wikipedia_triplet, or wikipedia_triplet_mnrl." >&2
       exit 1
       ;;
   esac

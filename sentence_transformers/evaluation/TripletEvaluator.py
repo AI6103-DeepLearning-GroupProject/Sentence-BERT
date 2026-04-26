@@ -26,7 +26,12 @@ class TripletEvaluator(SentenceEvaluator):
         """
         self.dataloader = dataloader
         self.main_distance_function = main_distance_function
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
         self.name = name
         if name:
             name = "_"+name
@@ -36,6 +41,7 @@ class TripletEvaluator(SentenceEvaluator):
 
     def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1) -> float:
         model.eval()
+        self.device = model.device
 
         if epoch != -1:
             if steps == -1:
