@@ -173,6 +173,8 @@ def _build_model(model_cfg: dict):
         pooling_mode_max_tokens=pooling_cfg.get("max_tokens", False),
         pooling_mode_mean_tokens=pooling_cfg.get("mean_tokens", True),
         pooling_mode_mean_sqrt_len_tokens=pooling_cfg.get("mean_sqrt_len_tokens", False),
+        pooling_mode_attention_tokens=pooling_cfg.get("attention_tokens", False),
+        pooling_mode_attention_fusion=pooling_cfg.get("attention_fusion", "concat"),
     )
 
     return SentenceTransformer(modules=[word_embedding_model, pooling_model])
