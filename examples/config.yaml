@@ -192,43 +192,43 @@ experiments:
 
         nli:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         nli_mnrl:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-            training:
-              num_epochs: 1
-          - name: mnrl
-            task:
-              type: mnrl_contrastive
-            data:
-              pairs_path: datasets/contrastive/nli_pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+              training:
+                num_epochs: 1
+            - name: mnrl
+              task:
+                type: mnrl_contrastive
+              data:
+                pairs_path: datasets/contrastive/nli_pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
         sts_nli:
           stages:
             - name: nli
@@ -288,293 +288,293 @@ experiments:
 
         sts_nli_mnrl:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
-          - name: mnrl
-            task:
-              type: mnrl_contrastive
-            data:
-              pairs_path: datasets/contrastive/pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: sts
-            task:
-              type: sts_cosine
-            data:
-              sts_path: datasets/stsbenchmark
-              sts_train_file: sts-train.csv
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl
+              task:
+                type: mnrl_contrastive
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         sts_nli_mnrl_unireg:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
-          - name: mnrl_unireg
-            task:
-              type: mnrl_unireg_contrastive
-              scale: 20.0
-              uniformity_weight: 0.001
-              uniformity_t: 2.0
-            data:
-              pairs_path: datasets/contrastive/pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: sts
-            task:
-              type: sts_cosine
-            data:
-              sts_path: datasets/stsbenchmark
-              sts_train_file: sts-train.csv
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl_unireg
+              task:
+                type: mnrl_unireg_contrastive
+                scale: 20.0
+                uniformity_weight: 0.001
+                uniformity_t: 2.0
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         sts_nli_mnrl_unireg_cosent:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
-          - name: mnrl_unireg
-            task:
-              type: mnrl_unireg_contrastive
-              scale: 20.0
-              uniformity_weight: 0.001
-              uniformity_t: 2.0
-            data:
-              pairs_path: datasets/contrastive/pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: sts_cosent
-            task:
-              type: sts_cosent
-              scale: 20.0
-            data:
-              sts_path: datasets/stsbenchmark
-              sts_train_file: sts-train.csv
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl_unireg
+              task:
+                type: mnrl_unireg_contrastive
+                scale: 20.0
+                uniformity_weight: 0.001
+                uniformity_t: 2.0
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts_cosent
+              task:
+                type: sts_cosent
+                scale: 20.0
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         sts_nli_mnrl_cosent:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
-          - name: mnrl
-            task:
-              type: mnrl_contrastive
-            data:
-              pairs_path: datasets/contrastive/pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: sts_cosent
-            task:
-              type: sts_cosent
-              scale: 20.0
-            data:
-              sts_path: datasets/stsbenchmark
-              sts_train_file: sts-train.csv
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl
+              task:
+                type: mnrl_contrastive
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts_cosent
+              task:
+                type: sts_cosent
+                scale: 20.0
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         sts_nli_mnrl_aoe:
           stages:
-          - name: nli
-            task:
-              type: nli_softmax
-            data:
-              nli_path: datasets/AllNLI
-              nli_train_file: train.gz
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
-          - name: mnrl_aoe_joint
-            task:
-              type: mnrl_aoe_joint
-              mnrl_batch_size: 32
-              aoe_batch_size: 32
-              angle_weight: 1.0
-              contrastive_weight: 0.8
-              angle_temperature: 0.05
-              contrastive_temperature: 0.05
-              contrastive_symmetric: true
-            data:
-              pairs_path: datasets/contrastive/pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-              hard_negative_col_idx: 2
-              use_hard_negative: true
-              aoe_pairs_path: datasets/contrastive/aoe_pairs_train.tsv
-              aoe_delimiter: "\t"
-              aoe_has_header: false
-              aoe_text1_col_idx: 0
-              aoe_text2_col_idx: 1
-              aoe_score_col_idx: 2
-              sts_path: datasets/stsbenchmark
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 2
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: sts
-            task:
-              type: sts_cosine
-            data:
-              sts_path: datasets/stsbenchmark
-              sts_train_file: sts-train.csv
-              sts_dev_file: sts-dev.csv
-              sts_test_file: sts-test.csv
-              normalize_scores: true
-            training:
-              num_epochs: 1
+            - name: nli
+              task:
+                type: nli_softmax
+              data:
+                nli_path: datasets/AllNLI
+                nli_train_file: train.gz
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
+            - name: mnrl_aoe_joint
+              task:
+                type: mnrl_aoe_joint
+                mnrl_batch_size: 32
+                aoe_batch_size: 32
+                angle_weight: 1.0
+                contrastive_weight: 0.8
+                angle_temperature: 0.05
+                contrastive_temperature: 0.05
+                contrastive_symmetric: true
+              data:
+                pairs_path: datasets/contrastive/pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+                hard_negative_col_idx: 2
+                use_hard_negative: true
+                aoe_pairs_path: datasets/contrastive/aoe_pairs_train.tsv
+                aoe_delimiter: "\t"
+                aoe_has_header: false
+                aoe_text1_col_idx: 0
+                aoe_text2_col_idx: 1
+                aoe_score_col_idx: 2
+                sts_path: datasets/stsbenchmark
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 2
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: sts
+              task:
+                type: sts_cosine
+              data:
+                sts_path: datasets/stsbenchmark
+                sts_train_file: sts-train.csv
+                sts_dev_file: sts-dev.csv
+                sts_test_file: sts-test.csv
+                normalize_scores: true
+              training:
+                num_epochs: 1
         wikipedia_triplet:
           stages:
-          - name: wikipedia_triplet
-            task:
-              type: triplet
-            data:
-              triplet_path: datasets/wikipedia-sections-triplets
-              train_file: train.csv
-              dev_file: validation.csv
-              test_file: test.csv
-              dev_max_examples: 1000
-              s1_col_idx: 1
-              s2_col_idx: 2
-              s3_col_idx: 3
-              delimiter: ','
-              quoting: QUOTE_MINIMAL
-              has_header: true
+            - name: wikipedia_triplet
+              task:
+                type: triplet
+              data:
+                triplet_path: datasets/wikipedia-sections-triplets
+                train_file: train.csv
+                dev_file: validation.csv
+                test_file: test.csv
+                dev_max_examples: 1000
+                s1_col_idx: 1
+                s2_col_idx: 2
+                s3_col_idx: 3
+                delimiter: ','
+                quoting: QUOTE_MINIMAL
+                has_header: true
         wikipedia_triplet_mnrl:
           stages:
-          - name: wikipedia_mnrl
-            task:
-              type: mnrl_contrastive
-            data:
-              pairs_path: datasets/contrastive/wikipedia_pairs_train.tsv
-              delimiter: "\t"
-              has_header: false
-              text1_col_idx: 0
-              text2_col_idx: 1
-            training:
-              num_epochs: 1
-              batch_size: 32
-              evaluation_steps: 2000
-          - name: wikipedia_triplet
-            task:
-              type: triplet
-            data:
-              triplet_path: datasets/wikipedia-sections-triplets
-              train_file: train.csv
-              dev_file: validation.csv
-              test_file: test.csv
-              dev_max_examples: 1000
-              s1_col_idx: 1
-              s2_col_idx: 2
-              s3_col_idx: 3
-              delimiter: ','
-              quoting: QUOTE_MINIMAL
-              has_header: true
-            training:
-              num_epochs: 1
+            - name: wikipedia_mnrl
+              task:
+                type: mnrl_contrastive
+              data:
+                pairs_path: datasets/contrastive/wikipedia_pairs_train.tsv
+                delimiter: "\t"
+                has_header: false
+                text1_col_idx: 0
+                text2_col_idx: 1
+              training:
+                num_epochs: 1
+                batch_size: 32
+                evaluation_steps: 2000
+            - name: wikipedia_triplet
+              task:
+                type: triplet
+              data:
+                triplet_path: datasets/wikipedia-sections-triplets
+                train_file: train.csv
+                dev_file: validation.csv
+                test_file: test.csv
+                dev_max_examples: 1000
+                s1_col_idx: 1
+                s2_col_idx: 2
+                s3_col_idx: 3
+                delimiter: ','
+                quoting: QUOTE_MINIMAL
+                has_header: true
+              training:
+                num_epochs: 1
     output:
       name_prefix: training_runtime
